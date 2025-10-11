@@ -1,109 +1,108 @@
-
-
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bruxin - Loja Oficial</title>
+  <title>Loja Bruxin 🧙‍♂️</title>
   <style>
     body {
-      background-color: #0a0a0a;
-      color: #fff;
       font-family: Arial, sans-serif;
+      background-color: #000;
+      color: white;
+      text-align: center;
       margin: 0;
       padding: 0;
     }
 
     header {
       background-color: #111;
+      padding: 20px;
+      box-shadow: 0 0 15px #ff00ff;
+    }
+
+    h1 {
+      color: #ff00ff;
+      font-size: 2.2em;
+    }
+
+    h2 {
+      margin-top: 10px;
+      font-weight: normal;
+      color: #f5f5f5;
+    }
+
+    .search-box {
+      margin-top: 15px;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      width: 80%;
+      max-width: 320px;
       text-align: center;
-      padding: 20px 0;
-      box-shadow: 0 2px 10px rgba(255, 255, 255, 0.1);
-    }
-
-    header h1 {
-      font-size: 2em;
-      color: #ff0088;
-      margin: 0;
-    }
-
-    main {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 30px;
-      padding: 40px;
+      font-size: 1em;
+      background-color: #222;
+      color: #fff;
+      outline: none;
+      box-shadow: 0 0 8px #ff00ff66;
     }
 
     .produto {
-      background-color: #141414;
-      border-radius: 15px;
-      overflow: hidden;
-      box-shadow: 0 0 15px rgba(255, 0, 150, 0.2);
-      text-align: center;
-      transition: transform 0.2s ease;
+      background: #111;
+      border-radius: 12px;
+      margin: 25px auto;
+      padding: 20px;
+      max-width: 350px;
+      box-shadow: 0 0 15px #ff00ff66;
+      transition: transform 0.3s;
     }
 
     .produto:hover {
       transform: scale(1.03);
     }
 
-    .produto img {
-      width: 100%;
-      height: 250px;
-      object-fit: cover;
-    }
-
-    .produto h2 {
-      color: #ff00aa;
-      margin: 15px 0 5px;
-    }
-
-    .produto p {
-      color: #ccc;
-      font-size: 1em;
-      margin: 5px 20px 15px;
+    .produto h3 {
+      color: #ff00ff;
+      font-size: 1.6em;
+      margin-bottom: 10px;
     }
 
     .preco {
-      color: #00ff99;
-      font-size: 1.2em;
+      color: #ccc;
+      font-size: 1.3em;
+      margin: 10px 0;
       font-weight: bold;
     }
 
-    .whatsapp-btn {
-      display: inline-block;
+    .btn-whatsapp {
       background-color: #25D366;
       color: white;
-      padding: 12px 25px;
-      border-radius: 8px;
+      padding: 12px 20px;
+      border-radius: 10px;
       text-decoration: none;
       font-weight: bold;
-      margin-bottom: 20px;
       transition: 0.3s;
+      display: inline-block;
     }
 
-    .whatsapp-btn:hover {
-      background-color: #1ebd5a;
+    .btn-whatsapp:hover {
+      background-color: #1eb15d;
     }
 
     footer {
-      text-align: center;
-      background-color: #111;
-      color: #bbb;
+      background: #111;
       padding: 20px;
       font-size: 0.9em;
-      border-top: 1px solid #222;
+      color: #aaa;
+      box-shadow: 0 -2px 10px #ff00ff66;
     }
 
-    footer p {
-      margin: 5px 0;
-    }
-
-    .desc-final {
-      font-size: 0.95em;
-      margin-top: 15px;
-      color: #ccc;
+    footer p:last-child {
+      color: #ffcc00;
+      font-weight: bold;
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -111,47 +110,60 @@
 
   <header>
     <h1>🧙‍♂️ Loja Bruxin</h1>
-    <p>Os melhores Brainrots estão aqui! 💫</p>
+    <h2>Os melhores Brainrots estão aqui! 💫</h2>
+
+    <div class="search-box">
+      <input type="text" id="search" placeholder="🔍 Pesquise um produto..." onkeyup="buscarProduto()">
+    </div>
   </header>
 
-  <main>
-
-    <!-- Produto 1 -->
-    <div class="produto">
-      <img src="images (1).jpeg" alt="Sorte Infinita">
-      <h2>Sorte Infinita 🎁</h2>
+  <div id="produtos">
+    <section class="produto">
+      <h3>Sorte Infinita 🎁</h3>
       <p>Compre um secret aleatório de 1M a 30M.</p>
-      <p class="preco">R$10</p>
-      <a class="whatsapp-btn" href="https://wa.me/558998984658374?text=Olá!%20Quero%20comprar%20o%20produto%20Sorte%20Infinita">Comprar no WhatsApp</a>
-      <p class="desc-final">Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
-    </div>
+      <div class="preco">R$10</div>
+      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
+      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
+    </section>
 
-    <!-- Produto 2 -->
-    <div class="produto">
-      <img src="Screenshot_20251011_092438_Roblox.jpg" alt="Los Primos">
-      <h2>Los Primos 🔥</h2>
+    <section class="produto">
+      <h3>Los Primos 🔥</h3>
       <p>Los Primos 341M/s</p>
-      <p class="preco">R$220</p>
-      <a class="whatsapp-btn" href="https://wa.me/558998984658374?text=Olá!%20Quero%20comprar%20o%20produto%20Los%20Primos">Comprar no WhatsApp</a>
-      <p class="desc-final">Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
-    </div>
+      <div class="preco">R$220</div>
+      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
+      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
+    </section>
 
-    <!-- Produto 3 -->
-    <div class="produto">
-      <img src="Screenshot_20251011_092424_Roblox.jpg" alt="Los Combinasonas">
-      <h2>Los Combinasonas 💥</h2>
+    <section class="produto">
+      <h3>Los Combinasonas 💥</h3>
       <p>Los Combinasonas 195M/s</p>
-      <p class="preco">R$120</p>
-      <a class="whatsapp-btn" href="https://wa.me/558998984658374?text=Olá!%20Quero%20comprar%20o%20produto%20Los%20Combinasonas">Comprar no WhatsApp</a>
-      <p class="desc-final">Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
-    </div>
-
-  </main>
+      <div class="preco">R$120</div>
+      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
+      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
+    </section>
+  </div>
 
   <footer>
-    <p>© 2025 Loja Bruxin. Todos os direitos reservados.</p>
-    <p>Feito com 💜 por Bruxin.</p>
+    <p>© 2025 Loja Bruxin. Todos os direitos reservados. Feito com 💜 por Bruxin.</p>
+    <p>⚠️ Em breve mais estoque atualizado para vocês! ⚠️</p>
   </footer>
+
+  <script>
+    function buscarProduto() {
+      const input = document.getElementById("search").value.toLowerCase();
+      const produtos = document.querySelectorAll(".produto");
+
+      produtos.forEach(produto => {
+        const nome = produto.querySelector("h3").innerText.toLowerCase();
+        if (nome.includes(input)) {
+          produto.style.display = "block";
+        } else {
+          produto.style.display = "none";
+        }
+      });
+    }
+  </script>
 
 </body>
 </html>
+
