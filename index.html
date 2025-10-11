@@ -61,13 +61,23 @@
   </footer>
 
   <script>
-    /* ========== CONFIG ========== */
-    const ADMIN_USER = 'admin';
-    const DEFAULT_ADMIN_PASS = '1234';
-    const WA_NUMBER = '+55 98 98465-8374'; // international format for wa.me
-    const STORE_KEY = 'brunin_products_v1';
-    const PASS_KEY = 'brunin_admin_pass_v1';
-    const CART_KEY = 'brunin_cart_v1';
+const STORE_KEY = 'brunin_products_v1';
+
+(function seed(){
+  if(!localStorage.getItem(STORE_KEY)){
+    const sample = [
+      {name:'Los primos (341M)', price:240, image:'https://i.imgur.com/EXEMPLO.png', desc:'Los primos de larva. Entrega via WhatsApp', stock:3},
+      {name:'Los combinacionas (195M)', price:120, image:'https://i.imgur.com/EXEMPLO2.png', desc:'Entrega via whatsapp', stock:5}
+    ];
+    // Se seu projeto tem uma função saveProducts(sample) use ela:
+    if(typeof saveProducts === 'function'){
+      saveProducts(sample);
+    } else {
+      localStorage.setItem(STORE_KEY, JSON.stringify(sample));
+    }
+  }
+})();
+
 
     document.getElementById('wa-num').innerText = '(98) 98465-8374';
 
