@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Loja do Brunin</title>
+  <style>
+    :root{--accent:#0066ff;--accent-2:#00d86b;--card:#111827;--muted:#6b7280}
+    *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    body{margin:0;background:linear-gradient(180deg,#0f172a 0%,#071027 100%);color:#e6eef8}
+    header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;background:rgba(255,255,255,0.03);backdrop-filter:blur(6px)}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:700}
+    h1{margin:0;font-size:18px}
+    .sub{color:var(--muted);font-size:13px}
+    main{padding:20px;max-width:1100px;margin:18px auto}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:14px;border-radius:12px}
+    .thumb{height:140px;background:#0b1220;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;overflow:hidden}
+    img{max-width:100%;max-height:100%;object-fit:cover}
+    button{cursor:pointer;border:0;padding:10px 12px;border-radius:10px;background:var(--accent);color:white}
+    .muted{color:var(--muted)}
+    .admin-link{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;color:var(--muted)}
+    .top-actions{display:flex;gap:10px;align-items:center}
+    .whatsapp{background:linear-gradient(90deg,#25d366,#1eb34a)}
+    .cart-btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;color:var(--muted)}
+    .center{display:flex;align-items:center;justify-content:center}
+    .form-row{display:flex;gap:8px}
+    input,textarea,select{width:100%;padding:10px;border-radius:8px;border:0;background:rgba(255,255,255,0.03);color:inherit}
+    label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+    .panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:14px;border-radius:12px}
+    footer{padding:20px;text-align:center;color:var(--muted)}
+    .small{font-size:13px}
+    .badge{display:inline-block;padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.03);font-size:13px}
+    .danger{background:#7b1422}
+    @media(max-width:640px){.form-row{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">B</div>
+      <div>
+        <h1>Loja do Brunin</h1>
+        <div class="sub">Itens e palavras para Roblox</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="cart-btn" id="open-cart">Carrinho (<span id="cart-count">0</span>)</button>
+      <a id="whatsapp-main" class="admin-link whatsapp" href="#">💬 Falar no WhatsApp</a>
+      <a href="#/admin" class="admin-link">🔒 Admin</a>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- Views rendered by JS -->
+  </main>
+
+  <footer>
+    <div class="small">Loja do Brunin • Criado para vendas de itens do Roblox • WhatsApp: <span id="wa-num">(98) 98465-8375</span></div>
+  </footer>
+
+  <script>
+    /* ========== CONFIG ========== */
+    const ADMIN_USER = 'admin';
+    const DEFAULT_ADMIN_PASS = '1234';
+    const WA_NUMBER = '+55 98 98465-8375'; // international format for wa.me
+    const STORE_KEY = 'brunin_products_v1';
+    const PASS_KEY = 'brunin_admin_pass_v1';
+    const CART_KEY = 'brunin_cart_v1';
+
+    document.getElementById('wa-num').innerText = '(98) 98465-8375';
+
+    // prepare WhatsApp main link
+    const waMain = document.getElementById('whatsapp-main');
+    waMain.href = makeWhatsAppLink('Olá, quero informações sobre a Loja do Brunin.');
+
+    function makeWhatsAppLink(text){
+      const cleaned = WA_NUMBER.replace(/[^+\d]/g,'');
+      const encoded = encodeURIComponent(text);
+      return `https://wa.me/${cleaned.replace('+','')}/?text=${encoded}`;
+    }
+
+    /* ========== Storage helpers ========== */
+    function loadProducts(){
+      try{const raw=localStorage.getItem(STORE_KEY);return raw?JSON.parse(raw):[];}catch(e){return[]}
+    }
+    function saveProducts(arr){localStorage.setItem(STORE_KEY,JSON.stringify(arr))}
+
+    function getAdminPass(){return localStorage.getItem(PASS_KEY)||DEFAULT_ADMIN_PASS}
+    function setAdminPass(p){localStorage.setItem(PASS_KEY,p)}
+
+    function loadCart(){try{return JSON.parse(localStorage.getItem(CART_KEY))||[];}catch(e){return[]}}
+    function saveCart(c){localStorage.setItem(CART_KEY,JSON.stringify(c));renderCartCount();}
+
+    function renderCartCount(){const c=loadCart();document.getElementById('cart-count').innerText=c.reduce((s,i)=>s+i.qty,0)}
+
+    /* ========== Routing ========== */
+    function router(){
+      const hash = location.hash || '#/home';
+      if(hash.startsWith('#/admin')) renderAdmin();
+      else renderHome();
+    }
+
+    /* ========== Home (public store) ========== */
+    function renderHome(){
+      const products = loadProducts();
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <section style="display:flex;gap:18px;align-items:center;margin-bottom:18px">
+          <div style="flex:1">
+            <h2 style="margin:0">Produtos</h2>
+            <div class="sub" style="margin-top:6px">Veja os itens disponíveis e compre por WhatsApp</div>
+          </div>
+          <div style="width:280px">
+            <div class="panel">
+              <div class="small muted">Dica: ao comprar, confirme nome do item e preço no WhatsApp</div>
+              <div style="height:6px"></div>
+              <button id="open-whatsapp" class="whatsapp" style="width:100%">💬 Comprar no WhatsApp</button>
+            </div>
+          </div>
+        </section>
+        <div class="grid" id="products-grid"></div>
+      `;
+      const grid = document.getElementById('products-grid');
+      if(products.length===0){grid.innerHTML='<div class="card">Nenhum produto cadastrado ainda. Peça no WhatsApp!</div>';return}
+      products.forEach((p,idx)=>{
+        const el = document.createElement('div');el.className='card';
+        el.innerHTML=`
+          <div class="thumb">${p.image?`<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}">`:'<div class="center muted">Sem imagem</div>'}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div>
+              <div style="font-weight:700">${escapeHtml(p.name)}</div>
+              <div class="muted small">${escapeHtml(p.desc||'')}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:700">R$ ${Number(p.price).toFixed(2)}</div>
+              <div class="muted small">Quantidade: ${p.stock||1}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button data-idx="${idx}" class="add-cart">Adicionar ao carrinho</button>
+            <button data-idx="${idx}" class="buy-whatsapp admin-link whatsapp">Comprar (WhatsApp)</button>
+          </div>
+        `;
+        grid.appendChild(el);
+      });
+
+      document.querySelectorAll('.add-cart').forEach(btn=>btn.addEventListener('click',e=>{
+        const idx = Number(e.currentTarget.dataset.idx);
+        addToCart(idx);
+      }));
+
+      document.querySelectorAll('.buy-whatsapp').forEach(btn=>btn.addEventListener('click',e=>{
+        const idx=Number(e.currentTarget.dataset.idx);const p=products[idx];
+        const text = `Olá, quero comprar *${p.name}* (R$ ${Number(p.price).toFixed(2)}).`;
+        window.open(makeWhatsAppLink(text),'_blank');
+      }));
+
+      document.getElementById('open-whatsapp').addEventListener('click',()=>{
+        window.open(makeWhatsAppLink('Olá, quero comprar alguns itens da Loja do Brunin.'),'_blank');
+      });
+    }
+
+    function addToCart(productIndex){
+      const products = loadProducts();
+      const p = products[productIndex];
+      if(!p) return alert('Produto não encontrado');
+      const cart = loadCart();
+      const existing = cart.find(i=>i.name===p.name);
+      if(existing) existing.qty += 1; else cart.push({name:p.name,price:p.price,qty:1});
+      saveCart(cart);
+      alert('Produto adicionado ao carrinho');
+    }
+
+    /* ========== Cart modal / checkout ========== */
+    function openCart(){
+      const cart = loadCart();
+      if(cart.length===0) return alert('Seu carrinho está vazio');
+      const lines = cart.map(i=>`${i.qty} x ${i.name} - R$ ${Number(i.price).toFixed(2)}`).join('\n');
+      const total = cart.reduce((s,i)=>s + (i.qty * Number(i.price)),0).toFixed(2);
+      const message = `Olá, quero comprar:\n${lines}\nTotal: R$ ${total}`;
+      const link = makeWhatsAppLink(message);
+      if(confirm('Abrir WhatsApp para finalizar a compra?\n\n' + lines + '\nTotal: R$ ' + total)){
+        window.open(link,'_blank');
+      }
+    }
+
+    document.getElementById('open-cart').addEventListener('click',openCart);
+
+    /* ========== Admin area ========== */
+    function renderAdmin(){
+      const app = document.getElementById('app');
+      const pass = getAdminPass();
+      // check if logged in
+      const token = sessionStorage.getItem('brunin_admin_token');
+      if(token !== 'ok'){
+        app.innerHTML = `
+          <div style="max-width:520px;margin:0 auto">
+            <div class="panel">
+              <h2>Admin — Login</h2>
+              <div class="sub">Entre com o usuário e senha</div>
+              <div style="height:12px"></div>
+              <label>Usuário</label>
+              <input id="login-user" value="admin">
+              <label>Senha</label>
+              <input id="login-pass" type="password" value="">
+              <div style="height:12px"></div>
+              <div style="display:flex;gap:8px">
+                <button id="do-login">Entrar</button>
+                <a href="#/home" class="admin-link">Voltar à loja</a>
+              </div>
+              <div style="height:8px"></div>
+              <div class="muted small">Senha atual (padrão): <span class="badge">${pass}</span> — você pode alterá-la depois.</div>
+            </div>
+          </div>
+        `;
+        document.getElementById('do-login').addEventListener('click',()=>{
+          const u = document.getElementById('login-user').value.trim();
+          const p = document.getElementById('login-pass').value;
+          if(u===ADMIN_USER && p===getAdminPass()){sessionStorage.setItem('brunin_admin_token','ok');renderAdmin();}
+          else alert('Usuário ou senha incorretos');
+        });
+        return;
+      }
+
+      // logged in -> admin dashboard
+      const products = loadProducts();
+      app.innerHTML = `
+        <div style="display:flex;gap:18px;flex-direction:column">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <h2>Administração — Loja do Brunin</h2>
+              <div class="sub">Gerencie produtos e configurações</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="admin-link" id="logout">Sair</button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 340px;gap:18px">
+            <div>
+              <div class="panel">
+                <h3>Produtos cadastrados</h3>
+                <div id="admin-products-list"></div>
+              </div>
+            </div>
+            <div>
+              <div class="panel">
+                <h3>Adicionar / Editar produto</h3>
+                <label>Nome</label>
+                <input id="p-name">
+                <label>Preço (ex: 9.90)</label>
+                <input id="p-price">
+                <label>Imagem (URL)</label>
+                <input id="p-image" placeholder="https://...">
+                <label>Descrição</label>
+                <textarea id="p-desc" rows="3"></textarea>
+                <label>Quantidade em estoque</label>
+                <input id="p-stock" value="1">
+                <div style="height:10px"></div>
+                <div style="display:flex;gap:8px">
+                  <button id="save-product">Salvar</button>
+                  <button id="clear-form" class="admin-link">Limpar</button>
+                </div>
+                <div style="height:12px"></div>
+                <h4>Configurações</h4>
+                <label>Alterar senha admin</label>
+                <input id="new-pass" placeholder="nova senha">
+                <div style="height:8px"></div>
+                <button id="change-pass" class="admin-link">Alterar senha</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('logout').addEventListener('click',()=>{sessionStorage.removeItem('brunin_admin_token');location.hash='#/home';router();});
+
+      function refreshList(){
+        const list = document.getElementById('admin-products-list');
+        const arr = loadProducts();
+        if(arr.length===0){list.innerHTML='<div class="muted">Nenhum produto</div>';return}
+        list.innerHTML = '';
+        arr.forEach((p,i)=>{
+          const node = document.createElement('div');node.style.marginBottom='10px';
+          node.innerHTML = `
+            <div style="display:flex;gap:8px;align-items:center">
+              <div style="width:64px;height:64px;border-radius:8px;overflow:hidden;background:#0b1220"><img src="${escapeHtml(p.image||'')}" style="width:100%;height:100%;object-fit:cover"></div>
+              <div style="flex:1">
+                <div style="font-weight:700">${escapeHtml(p.name)}</div>
+                <div class="muted small">R$ ${Number(p.price).toFixed(2)}</div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button data-i="${i}" class="edit">Editar</button>
+                <button data-i="${i}" class="del danger">Excluir</button>
+              </div>
+            </div>
+          `;
+          list.appendChild(node);
+        });
+        document.querySelectorAll('.edit').forEach(b=>b.addEventListener('click',e=>{
+          const i=Number(e.currentTarget.dataset.i);populateForm(i);
+        }));
+        document.querySelectorAll('.del').forEach(b=>b.addEventListener('click',e=>{
+          const i=Number(e.currentTarget.dataset.i);if(confirm('Excluir produto?')){const arr=loadProducts();arr.splice(i,1);saveProducts(arr);refreshList();}
+        }));
+      }
+
+      refreshList();
+
+      // save product
+      document.getElementById('save-product').addEventListener('click',()=>{
+        const name = document.getElementById('p-name').value.trim();
+        const price = parseFloat(document.getElementById('p-price').value);
+        const image = document.getElementById('p-image').value.trim();
+        const desc = document.getElementById('p-desc').value.trim();
+        const stock = parseInt(document.getElementById('p-stock').value)||1;
+        if(!name || isNaN(price)){return alert('Nome e preço são obrigatórios')}
+        const arr = loadProducts();
+        const editingIndex = document.getElementById('save-product').dataset.editIndex;
+        if(editingIndex){
+          arr[editingIndex] = {name,price,image,desc,stock};
+          delete document.getElementById('save-product').dataset.editIndex;
+        } else {
+          arr.push({name,price,image,desc,stock});
+        }
+        saveProducts(arr);refreshList();clearForm();alert('Produto salvo')
+      });
+
+      document.getElementById('clear-form').addEventListener('click',clearForm);
+
+      function clearForm(){document.getElementById('p-name').value='';document.getElementById('p-price').value='';document.getElementById('p-image').value='';document.getElementById('p-desc').value='';document.getElementById('p-stock').value='1';delete document.getElementById('save-product').dataset.editIndex}
+
+      function populateForm(i){const arr=loadProducts();const p=arr[i];document.getElementById('p-name').value=p.name;document.getElementById('p-price').value=p.price;document.getElementById('p-image').value=p.image;document.getElementById('p-desc').value=p.desc;document.getElementById('p-stock').value=p.stock;document.getElementById('save-product').dataset.editIndex = i}
+
+      document.getElementById('change-pass').addEventListener('click',()=>{
+        const np = document.getElementById('new-pass').value.trim();
+        if(np.length<3) return alert('Senha deve ter 3+ caracteres');
+        setAdminPass(np);alert('Senha alterada com sucesso');document.getElementById('new-pass').value='';renderAdmin();
+      });
+    }
+
+    /* ========== Utilities ========== */
+    function escapeHtml(s){if(!s) return '';return s.replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+    /* ========== Init sample data (only if empty) ========== */
+    (function seed(){
+      if(!localStorage.getItem(STORE_KEY)){
+        const sample=[
+          {name:'Sword of Valor',price:9.90,image:'https://i.imgur.com/8Km9tLL.png',desc:'Espada lendária para saque',stock:10},
+          {name:'Robux Pack (100)',price:4.50,image:'https://i.imgur.com/0KfbG3V.png',desc:'Pacote de robux fictício',stock:50}
+        ];
+        saveProducts(sample);
+      }
+      renderCartCount();
+      router();
+    })();
+
+    window.addEventListener('hashchange',router);
+    window.addEventListener('load',router);
+  </script>
+</body>
+</html>
+
