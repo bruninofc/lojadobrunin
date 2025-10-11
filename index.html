@@ -35,89 +35,212 @@
 </div>
 
 <script>
-  // UTIL: salva avaliações por productId no localStorage
-  function storageKey(productId){ return 'reviews_'+productId; }
+  <script>
+    function buscarProduto() {
+      const input = document.getElementById("search").value.toLowerCase();
+      const produtos = document.querySelectorAll(".produto");
 
-  function getReviews(productId){
-    try {
-      const raw = localStorage.getItem(storageKey(productId));
-      return raw ? JSON.parse(raw) : [];
-    } catch(e){ return []; }
-  }
-
-  function saveReviews(productId, arr){
-    localStorage.setItem(storageKey(productId), JSON.stringify(arr));
-  }
-
-  function formatStars(avg){
-    // retorna string com estrelas preenchidas (unicode) - máximo 5
-    const full = Math.round(avg);
-    let s = '';
-    for(let i=0;i<5;i++) s += (i<full ? '★' : '☆');
-    return s;
-  }
-
-  function renderRating(productId){
-    const reviews = getReviews(productId);
-    const count = reviews.length;
-    const avg = count ? (reviews.reduce((a,b)=>a+b.rating,0)/count) : 0;
-    document.getElementById('avg-count').innerText = `Avaliações: ${count} • Média: ${avg.toFixed(1)}`;
-    document.getElementById('avg-stars').innerText = formatStars(avg);
-    // render reviews
-    const list = document.getElementById('reviews-list');
-    list.innerHTML = '';
-    // mostrar do mais recente
-    reviews.slice().reverse().forEach(r => {
-      const div = document.createElement('div');
-      div.className = 'single-review';
-      const meta = document.createElement('div');
-      meta.className = 'review-meta';
-      meta.innerHTML = `<strong>${escapeHtml(r.name||'Anônimo')}</strong> • ${r.rating} estrelas ${r.demo ? '<span class="demo-badge">demo</span>' : ''} • ${new Date(r.ts).toLocaleString()}`;
-      const text = document.createElement('div');
-      text.innerText = r.text || '';
-      div.appendChild(meta);
-      if(r.text) div.appendChild(text);
-      list.appendChild(div);
-    });
-  }
-
-  // função para escapar HTML simples (evita injeção)
-  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
-
-  // adicionar avaliação
-  function addReview(productId, rating, name, text, demo=false){
-    const arr = getReviews(productId);
-    arr.push({rating: Number(rating), name: String(name||''), text: String(text||''), ts: Date.now(), demo: !!demo});
-    saveReviews(productId, arr);
-    renderRating(productId);
-  }
-
-  // seed demo — CRIAR SÓ PARA TESTE E MARCAR COMO 'demo'
-  function seedDemoReviews(productId, n){
-    const names = ['Luana','Breno','Victor','Ana','DemoUser'];
-    for(let i=0;i<n;i++){
-      const rating = Math.floor(Math.random()*2)+4; // 4 ou 5
-      const name = names[i % names.length] + (i>10?i:'');
-      addReview(productId, rating, name, 'Avaliação de demonstração', true);
+      produtos.forEach(produto => {
+        const nome = produto.querySelector("h3").innerText.toLowerCase();
+        if (nome.includes(input)) {
+          produto.style.display = "block";
+        } else {
+          produto.style.display = "none";
+        }
+      });
     }
-  }
+  </script>
+<script>
+    function buscarProduto() {
+      const input = document.getElementById("search").value.toLowerCase();
+      const produtos = document.querySelectorAll(".produto");
 
-  // inicialização para o seu produto
-  (function(){
-    const container = document.getElementById('rating-for-prod-LOJADOBRUXIN');
-    if(!container) return;
-    const productId = container.dataset.productId || 'prod-default';
-    renderRating(productId);
+      produtos.forEach(produto => {
+        const nome = produto.querySelector("h3").innerText.toLowerCase();
+        if (nome.includes(input)) {
+          produto.style.display = "block";
+        } else {
+          produto.style.display = "none";
+        }
+      });
+    }
+  </script>
 
-    // vincular botão enviar
-    document.getElementById('rating-send').addEventListener('click', ()=>{
-      const score = document.getElementById('rating-score').value;
-      const name = document.getElementById('rating-name').value;
-      // opcional: prompt para comentário
-      const comment = prompt('Quer deixar um comentário? (opcional)') || '';
-      addReview(productId, score, name, comment, false);
-      alert('Obrigado! Sua avaliação foi salva localmente (apenas neste dispositivo).');
-    });
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loja Bruxin 🧙‍♂️</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #000;
+      color: white;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background-color: #111;
+      padding: 20px;
+      box-shadow: 0 0 15px #ff00ff;
+    }
+
+    h1 {
+      color: #ff00ff;
+      font-size: 2.2em;
+    }
+
+    h2 {
+      margin-top: 10px;
+      font-weight: normal;
+      color: #f5f5f5;
+    }
+
+    .search-box {
+      margin-top: 15px;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      width: 80%;
+      max-width: 320px;
+      text-align: center;
+      font-size: 1em;
+      background-color: #222;
+      color: #fff;
+      outline: none;
+      box-shadow: 0 0 8px #ff00ff66;
+    }
+
+    .produto {
+      background: #111;
+      border-radius: 12px;
+      margin: 25px auto;
+      padding: 20px;
+      max-width: 350px;
+      box-shadow: 0 0 15px #ff00ff66;
+      transition: transform 0.3s;
+    }
+
+    .produto:hover {
+      transform: scale(1.03);
+    }
+
+    .produto h3 {
+      color: #ff00ff;
+      font-size: 1.6em;
+      margin-bottom: 10px;
+    }
+
+    .preco {
+      color: #ccc;
+      font-size: 1.3em;
+      margin: 10px 0;
+      font-weight: bold;
+    }
+
+    .btn-whatsapp {
+      background-color: #25D366;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: bold;
+      transition: 0.3s;
+      display: inline-block;
+    }
+
+    .btn-whatsapp:hover {
+      background-color: #1eb15d;
+    }
+
+    footer {
+      background: #111;
+      padding: 20px;
+      font-size: 0.9em;
+      color: #aaa;
+      box-shadow: 0 -2px 10px #ff00ff66;
+    }
+
+    footer p:last-child {
+      color: #ffcc00;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🧙‍♂️ Loja Bruxin</h1>
+    <h2>Os melhores Brainrots estão aqui! 💫</h2>
+
+    <div class="search-box">
+      <input type="text" id="search" placeholder="🔍 Pesquise um produto..." onkeyup="buscarProduto()">
+    </div>
+  </header>
+
+  <div id="produtos">
+    <section class="produto">
+      <h3>Sorte Infinita 🎁</h3>
+      <p>Compre um secret aleatório de 1M a 30M.</p>
+      <div class="preco">R$10</div>
+      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
+      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
+    </section>
+
+    <section class="produto">
+      <h3>Los Primos 🔥</h3>
+      <p>Los Primos 341M/s</p>
+      <div class="preco">R$220</div>
+      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
+      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
+    </section>
+
+    <section class="produto">
+      <h3>Los Combinasonas 💥</h3>
+      <p>Los Combinasonas 195M/s</p>
+      <div class="preco">R$120</div>
+      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
+      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
+    </section>
+  </div>
+
+  <footer>
+    <p>© 2025 Loja Bruxin. Todos os direitos reservados. Feito com 💜 por Bruxin.</p>
+    <p>⚠️ Em breve mais estoque atualizado para vocês! ⚠️</p>
+  </footer>
+
+  <script>
+    function buscarProduto() {
+      const input = document.getElementById("search").value.toLowerCase();
+      const produtos = document.querySelectorAll(".produto");
+
+      produtos.forEach(produto => {
+        const nome = produto.querySelector("h3").innerText.toLowerCase();
+        if (nome.includes(input)) {
+          produto.style.display = "block";
+        } else {
+          produto.style.display = "none";
+        }
+      });
+    }
+  </script>
+
+</body>
+</html>
+
+</body>
+</html>
+
 
     // se quiser gerar demo para ver como fica (descomente abaixo)
     // seedDemoReviews(productId, 50);
