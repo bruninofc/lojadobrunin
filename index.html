@@ -1,75 +1,4 @@
-  <!-- ================= AVALIAÇÕES - INÍCIO ================= -->
-<style>
-  .rating-card{background:#0f0f0f;padding:16px;border-radius:12px;margin:12px 0;color:#fff;box-shadow:0 0 30px rgba(255,0,150,0.12);}
-  .rating-stars{font-size:22px;color:#ffd700;margin-bottom:6px;}
-  .rating-count{color:#cfcfcf;margin-bottom:6px;}
-  .rating-submit{display:flex;gap:8px;align-items:center;margin-top:8px;}
-  .rating-submit select, .rating-submit input[type="text"], .rating-submit textarea{padding:8px;border-radius:8px;border:0;background:#222;color:#fff;min-width:120px}
-  .rating-submit button{background:#2bd36b;border:0;padding:10px 14px;border-radius:10px;color:#063;cursor:pointer}
-  .review-list{margin-top:12px}
-  .single-review{background:#111;padding:10px;border-radius:8px;margin-bottom:8px;color:#ddd}
-  .review-meta{font-size:12px;color:#999;margin-bottom:6px}
-  .demo-badge{background:linear-gradient(90deg,#ff7aa6,#9b7bff);color:#fff;padding:2px 6px;border-radius:6px;font-size:11px;margin-left:8px}
-</style>
-
-<div class="rating-card" id="rating-for-prod-LOJADOBRUXIN" data-product-id="lojadobrunin">
-  <div>
-    <div class="rating-stars" id="avg-stars">★★★★★</div>
-    <div class="rating-count" id="avg-count">Avaliações: 0 • Média: 0.0</div>
-  </div>
-
-  <div class="rating-submit">
-    <select id="rating-score">
-      <option value="5">⭐️⭐️⭐️⭐️⭐️ 5</option>
-      <option value="4">⭐️⭐️⭐️⭐️ 4</option>
-      <option value="3">⭐️⭐️⭐️ 3</option>
-      <option value="2">⭐️⭐️ 2</option>
-      <option value="1">⭐️ 1</option>
-    </select>
-
-    <input id="rating-name" type="text" placeholder="Seu nome (opcional)" />
-    <button id="rating-send">Enviar avaliação</button>
-  </div>
-
-  <div class="review-list" id="reviews-list"></div>
-</div>
-
-<script>
-  <script>
-    function buscarProduto() {
-      const input = document.getElementById("search").value.toLowerCase();
-      const produtos = document.querySelectorAll(".produto");
-
-      produtos.forEach(produto => {
-        const nome = produto.querySelector("h3").innerText.toLowerCase();
-        if (nome.includes(input)) {
-          produto.style.display = "block";
-        } else {
-          produto.style.display = "none";
-        }
-      });
-    }
-  </script>
-<script>
-    function buscarProduto() {
-      const input = document.getElementById("search").value.toLowerCase();
-      const produtos = document.querySelectorAll(".produto");
-
-      produtos.forEach(produto => {
-        const nome = produto.querySelector("h3").innerText.toLowerCase();
-        if (nome.includes(input)) {
-          produto.style.display = "block";
-        } else {
-          produto.style.display = "none";
-        }
-      });
-    }
-  </script>
-
-</body>
-</html>
-
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -80,9 +9,9 @@
       font-family: Arial, sans-serif;
       background-color: #000;
       color: white;
-      text-align: center;
       margin: 0;
       padding: 0;
+      text-align: center;
     }
 
     header {
@@ -93,69 +22,66 @@
 
     h1 {
       color: #ff00ff;
-      font-size: 2.2em;
-    }
-
-    h2 {
-      margin-top: 10px;
-      font-weight: normal;
-      color: #f5f5f5;
+      font-size: 2em;
     }
 
     .search-box {
-      margin-top: 15px;
+      margin: 15px auto;
+      width: 80%;
     }
 
-    input[type="text"] {
+    .search-box input {
+      width: 100%;
       padding: 10px;
       border-radius: 10px;
       border: none;
-      width: 80%;
-      max-width: 320px;
-      text-align: center;
-      font-size: 1em;
-      background-color: #222;
-      color: #fff;
       outline: none;
-      box-shadow: 0 0 8px #ff00ff66;
+      background: #222;
+      color: #fff;
+      font-size: 1em;
+      box-shadow: 0 0 10px #ff00ff66;
     }
 
-    .produto {
-      background: #111;
-      border-radius: 12px;
-      margin: 25px auto;
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
       padding: 20px;
-      max-width: 350px;
+    }
+
+    .product {
+      background-color: #111;
+      border-radius: 15px;
+      padding: 15px;
       box-shadow: 0 0 15px #ff00ff66;
       transition: transform 0.3s;
     }
 
-    .produto:hover {
-      transform: scale(1.03);
+    .product:hover {
+      transform: scale(1.05);
     }
 
-    .produto h3 {
+    .product h3 {
       color: #ff00ff;
-      font-size: 1.6em;
-      margin-bottom: 10px;
+      font-size: 1.3em;
     }
 
-    .preco {
+    .price {
       color: #ccc;
-      font-size: 1.3em;
+      font-size: 1.2em;
       margin: 10px 0;
       font-weight: bold;
     }
 
     .btn-whatsapp {
+      display: inline-block;
       background-color: #25D366;
       color: white;
-      padding: 12px 20px;
+      padding: 10px 15px;
       border-radius: 10px;
       text-decoration: none;
       font-weight: bold;
       transition: 0.3s;
-      display: inline-block;
     }
 
     .btn-whatsapp:hover {
@@ -163,17 +89,15 @@
     }
 
     footer {
-      background: #111;
-      padding: 20px;
+      background-color: #111;
+      color: #ccc;
+      padding: 15px;
       font-size: 0.9em;
-      color: #aaa;
-      box-shadow: 0 -2px 10px #ff00ff66;
+      box-shadow: 0 0 10px #ff00ff;
     }
 
-    footer p:last-child {
-      color: #ffcc00;
-      font-weight: bold;
-      margin-top: 8px;
+    footer span {
+      color: #ff00ff;
     }
   </style>
 </head>
@@ -181,69 +105,105 @@
 
   <header>
     <h1>🧙‍♂️ Loja Bruxin</h1>
-    <h2>Os melhores Brainrots estão aqui! 💫</h2>
-
+    <p>Os melhores Brainrots estão aqui! ✨</p>
     <div class="search-box">
-      <input type="text" id="search" placeholder="🔍 Pesquise um produto..." onkeyup="buscarProduto()">
+      <input type="text" id="searchInput" placeholder="Pesquisar produto...">
     </div>
   </header>
 
-  <div id="produtos">
-    <section class="produto">
-      <h3>Sorte Infinita 🎁</h3>
-      <p>Compre um secret aleatório de 1M a 30M.</p>
-      <div class="preco">R$10</div>
-      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
-      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
-    </section>
+  <main>
+    <div class="products" id="productList">
+      
+      <!-- Produtos -->
+      <div class="product" data-name="Sorte Infinita">
+        <h3>Sorte Infinita 🎁</h3>
+        <p>Secret aleatório de 1M a 30M.</p>
+        <p class="price">R$10</p>
+        <a href="https://wa.me/5589984658374?text=Ol%C3%A1!%20Gostaria%20de%20comprar%20a%20Sorte%20Infinita%20🎁" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
 
-    <section class="produto">
-      <h3>Los Primos 🔥</h3>
-      <p>Los Primos 341M/s</p>
-      <div class="preco">R$220</div>
-      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
-      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
-    </section>
+      <div class="product" data-name="Los Primos">
+        <h3>Los Primos 🔥</h3>
+        <p>Los Primos 341M/s</p>
+        <p class="price">R$200</p>
+        <a href="https://wa.me/5589984658374?text=Ol%C3%A1!%20Gostaria%20de%20comprar%20os%20Los%20Primos%20🔥" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
 
-    <section class="produto">
-      <h3>Los Combinasonas 💥</h3>
-      <p>Los Combinasonas 195M/s</p>
-      <div class="preco">R$120</div>
-      <a class="btn-whatsapp" href="https://wa.me/5598984658374" target="_blank">Comprar no WhatsApp</a>
-      <p>Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</p>
-    </section>
-  </div>
+      <div class="product" data-name="Los Primos YingYang">
+        <h3>Los Primos YingYang ⚫⚪</h3>
+        <p>681M/s</p>
+        <p class="price">R$400</p>
+        <a href="https://wa.me/5589984658374?text=Ol%C3%A1!%20Quero%20comprar%20o%20Los%20Primos%20YingYang%20⚫⚪" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Los Combinasonas">
+        <h3>Los Combinasonas 💥</h3>
+        <p>195M/s</p>
+        <p class="price">R$120</p>
+        <a href="https://wa.me/5589984658374?text=Ol%C3%A1!%20Quero%20comprar%20o%20Los%20Combinasonas%20💥" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Los Job Job Rainbow">
+        <h3>Los Job Job Rainbow 🌈</h3>
+        <p>25M/s</p>
+        <p class="price">R$15</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Los%20Job%20Job%20Rainbow%20🌈" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Graipuss Medusa Candy">
+        <h3>Graipuss Medusa Candy 🟣</h3>
+        <p>9M/s</p>
+        <p class="price">R$5</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Graipuss%20Medusa%20Candy%20🟣" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Pot Hotpos Amarelo">
+        <h3>Pot Hotpos 🟡</h3>
+        <p>5M/s</p>
+        <p class="price">R$2,5</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Pot%20Hotpos%20🟡" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Pot Hotpos Azul">
+        <h3>Pot Hotpos 🔵</h3>
+        <p>12M/s</p>
+        <p class="price">R$7,5</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Pot%20Hotpos%20🔵" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Los Lock Block">
+        <h3>Los Lock Block 🧱</h3>
+        <p>Produto especial</p>
+        <p class="price">R$6</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Los%20Lock%20Block%20🧱" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Secret Misterioso">
+        <h3>Secret Misterioso ❓</h3>
+        <p>1M - 10M aleatório</p>
+        <p class="price">R$3</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Secret%20Misterioso%20❓" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+    </div>
+  </main>
 
   <footer>
-    <p>© 2025 Loja Bruxin. Todos os direitos reservados. Feito com 💜 por Bruxin.</p>
-    <p>⚠️ Em breve mais estoque atualizado para vocês! ⚠️</p>
+    © 2025 Loja Bruxin. Em breve mais estoque atualizado para vocês⚠️  
+    <br>Feito com 💜 por <span>Bruxin</span>.
   </footer>
 
   <script>
-    function buscarProduto() {
-      const input = document.getElementById("search").value.toLowerCase();
-      const produtos = document.querySelectorAll(".produto");
+    const searchInput = document.getElementById("searchInput");
+    const products = document.querySelectorAll(".product");
 
-      produtos.forEach(produto => {
-        const nome = produto.querySelector("h3").innerText.toLowerCase();
-        if (nome.includes(input)) {
-          produto.style.display = "block";
-        } else {
-          produto.style.display = "none";
-        }
+    searchInput.addEventListener("input", () => {
+      const value = searchInput.value.toLowerCase();
+      products.forEach(prod => {
+        prod.style.display = prod.dataset.name.toLowerCase().includes(value) ? "block" : "none";
       });
-    }
+    });
   </script>
 
 </body>
 </html>
-
-</body>
-</html>
-
-
-    // se quiser gerar demo para ver como fica (descomente abaixo)
-    // seedDemoReviews(productId, 50);
-  })();
-</script>
-<!-- ================= AVALIAÇÕES - FIM ================= -->
