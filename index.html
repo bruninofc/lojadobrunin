@@ -1,482 +1,209 @@
-import React, { useEffect, useState } from "react";
-
-// Single-file React app (default export) using Tailwind classes.
-// Features implemented (front-end only, uses localStorage):
-// - Product listing with stock & price
-// - Simulated PIX payment flow (shows PIX key + amount; "Confirm payment" simulates success)
-// - After payment a "ticket" (pedido/chamado) is created and opens a simple chat between buyer and seller
-// - User profile with ability to rate (avaliar) completed orders
-// - Admin panel protected by a password to add/edit/delete products and change stock
-// NOTE: For a production-ready PIX integration you need a backend to generate a real PIX payload/QR code
-
-const STORAGE_KEYS = {
-  PRODUCTS: "ub_products_v1",
-  ORDERS: "ub_orders_v1",
-  REVIEWS: "ub_reviews_v1",
-  USER: "ub_user_v1",
-};
-
-const defaultProducts = [
-  {
-    id: "p1",
-    title: "Admin Lucky Block",
-    subtitle: "Conta com lucky block",
-    priceBR: 4.99,
-    priceLabel: "R$ 4,99",
-    stock: 10,
-    image: "",
-  },
-  {
-    id: "p2",
-    title: "Conta com Secreto dando M/s",
-    subtitle: "Secreto aleatório",
-    priceBR: 9.99,
-    priceLabel: "R$ 9,99",
-    stock: 5,
-    image: "",
-  },
-];
-
-function uid(prefix = "id") {
-  return prefix + Math.random().toString(36).slice(2, 9);
-}
-
-export default function App() {
-  const [products, setProducts] = useState(() => {
-    const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (raw) return JSON.parse(raw);
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(defaultProducts));
-    return defaultProducts;
-  });
-
-  const [orders, setOrders] = useState(() => {
-    const raw = localStorage.getItem(STORAGE_KEYS.ORDERS);
-    return raw ? JSON.parse(raw) : [];
-  });
-
-  const [reviews, setReviews] = useState(() => {
-    const raw = localStorage.getItem(STORAGE_KEYS.REVIEWS);
-    return raw ? JSON.parse(raw) : [];
-  });
-
-  const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem(STORAGE_KEYS.USER);
-    if (raw) return JSON.parse(raw);
-    const guest = { id: uid("u"), name: "Cliente", isAdmin: false };
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(guest));
-    return guest;
-  });
-
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [adminMode, setAdminMode] = useState(false);
-  const [adminAuthed, setAdminAuthed] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(reviews));
-  }, [reviews]);
-
-  function openPayment(product) {
-    setSelectedProduct(product);
-    setShowPaymentModal(true);
-  }
-
-  function simulatePixPayment(product, payerName = user.name) {
-    // Simulate payment flow: in real app, you'd call backend to create a PIX payload and confirm via webhook
-    const newOrder = {
-      id: uid("o"),
-      productId: product.id,
-      title: product.title,
-      amount: product.priceBR,
-      currency: "BRL",
-      status: "paid", // in real life would start as pending
-      buyerId: user.id,
-      buyerName: payerName,
-      createdAt: new Date().toISOString(),
-      messages: [
-        { from: "system", text: "Pedido criado. Entre em contato com o vendedor pelo chamado.", at: new Date().toISOString() },
-      ],
-    };
-
-    // decrement stock
-    setProducts((p) => p.map((it) => (it.id === product.id ? { ...it, stock: Math.max(0, it.stock - 1) } : it)));
-
-    setOrders((o) => [newOrder, ...o]);
-    setShowPaymentModal(false);
-  }
-
-  function addOrderMessage(orderId, fromName, text) {
-    setOrders((o) =>
-      o.map((ord) => (ord.id === orderId ? { ...ord, messages: [...ord.messages, { from: fromName, text, at: new Date().toISOString() }] } : ord))
-    );
-  }
-
-  function submitReview(orderId, rating, comment) {
-    const ord = orders.find((x) => x.id === orderId);
-    if (!ord) return;
-    const r = { id: uid("r"), orderId, productId: ord.productId, rating, comment, by: ord.buyerName, at: new Date().toISOString() };
-    setReviews((s) => [r, ...s]);
-  }
-
-  // Admin functions
-  function adminLogin(password) {
-    // Simple front-end only password check. In production use real auth.
-    if (password === "admin123") {
-      setAdminAuthed(true);
-      return true;
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loja Bruxin 🧙‍♂️</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #000;
+      color: white;
+      margin: 0;
+      padding: 0;
+      text-align: center;
     }
-    return false;
-  }
 
-  function adminAddProduct(data) {
-    const p = { ...data, id: uid("p"), stock: Number(data.stock || 0) };
-    setProducts((s) => [p, ...s]);
-  }
-
-  function adminEditProduct(id, data) {
-    setProducts((s) => s.map((p) => (p.id === id ? { ...p, ...data, stock: Number(data.stock) } : p)));
-  }
-
-  function adminDeleteProduct(id) {
-    setProducts((s) => s.filter((p) => p.id !== id));
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
-      <header className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div className="text-2xl font-bold">Ultimate Bloxx — Loja</div>
-          <div className="text-sm bg-orange-500 px-3 py-1 rounded">Novas contas todos os dias às 13h00</div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            className="bg-white text-black px-3 py-1 rounded"
-            onClick={() => {
-              const name = prompt("Digite seu nome (aparecerá no chamado):", user.name);
-              if (name) {
-                setUser((u) => ({ ...u, name }));
-                localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify({ ...user, name }));
-              }
-            }}
-          >
-            Perfil: {user.name}
-          </button>
-
-          <button
-            className="bg-indigo-600 px-3 py-1 rounded"
-            onClick={() => {
-              setAdminMode((m) => !m);
-            }}
-          >
-            {adminMode ? "Voltar" : "Painel de Adm"}
-          </button>
-        </div>
-      </header>
-
-      {adminMode ? (
-        <AdminPanel
-          authed={adminAuthed}
-          onLogin={adminLogin}
-          products={products}
-          onAdd={adminAddProduct}
-          onEdit={adminEditProduct}
-          onDelete={adminDeleteProduct}
-        />
-      ) : (
-        <main>
-          <section>
-            <h2 className="text-xl font-semibold mb-3">Steal a Brainrot</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {products.map((p) => (
-                <ProductCard key={p.id} product={p} onBuy={() => openPayment(p)} />
-              ))}
-            </div>
-          </section>
-
-          <section className="mt-8">
-            <h3 className="text-lg font-semibold mb-2">Meus Pedidos / Chamados</h3>
-            <OrdersList orders={orders} onMessage={addOrderMessage} onReview={submitReview} />
-          </section>
-
-          <section className="mt-8">
-            <h3 className="text-lg font-semibold mb-2">Avaliações</h3>
-            <ReviewsList reviews={reviews} products={products} />
-          </section>
-        </main>
-      )}
-
-      {showPaymentModal && selectedProduct && (
-        <PaymentModal
-          product={selectedProduct}
-          onClose={() => setShowPaymentModal(false)}
-          onConfirm={(name) => simulatePixPayment(selectedProduct, name)}
-        />
-      )}
-    </div>
-  );
-}
-
-function ProductCard({ product, onBuy }) {
-  return (
-    <div className="bg-gray-800 rounded-lg p-4 shadow">
-      <div className="h-40 bg-black rounded mb-3 flex items-center justify-center"> 
-        {/* placeholder image area */}
-        <span className="text-sm">Imagem</span>
-      </div>
-      <div className="font-semibold text-lg">{product.title}</div>
-      <div className="text-sm text-gray-300">{product.subtitle}</div>
-      <div className="mt-3 flex items-center justify-between">
-        <div>
-          <div className="text-xl font-bold">{product.priceLabel}</div>
-          <div className="text-xs text-gray-400">À vista no PIX</div>
-        </div>
-        <div className="text-right">
-          <div className={`text-sm ${product.stock > 0 ? 'text-green-300' : 'text-red-400'}`}>
-            Estoque: {product.stock}
-          </div>
-          <button disabled={product.stock <= 0} className="mt-2 bg-white text-black px-3 py-1 rounded" onClick={onBuy}>
-            Ver Detalhes
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PaymentModal({ product, onClose, onConfirm }) {
-  const pixKey = "00020126580014BR.GOV.BCB.PIX0114+551199999999520400005303986540" + (product.priceBR * 100).toFixed(0) + "5802BR5925Ultimate Bloxx6009Sao Paulo61080540900062070503***6304ABCD";
-  // Above is a dummy PIX payload string (NOT real) just for demonstration
-  const [name, setName] = useState("");
-
-  useEffect(() => {
-    const n = localStorage.getItem(STORAGE_KEYS.USER);
-    if (n) {
-      try {
-        const usr = JSON.parse(n);
-        setName(usr.name || "Cliente");
-      } catch (e) {}
+    header {
+      background-color: #111;
+      padding: 20px;
+      box-shadow: 0 0 15px #ff00ff;
     }
-  }, []);
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4">
-      <div className="bg-gray-800 rounded-lg w-full max-w-md p-6">
-        <h3 className="text-xl font-semibold mb-2">Pagamento via PIX — {product.title}</h3>
-        <div className="text-sm mb-4">Valor: <strong>{product.priceLabel}</strong></div>
-        <div className="mb-4">
-          <div className="text-xs text-gray-300">Chave PIX</div>
-          <div className="bg-black p-2 rounded mt-1 break-words text-sm">{pixKey}</div>
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm">Seu nome (aparecerá no chamado)</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full p-2 rounded bg-gray-900 border border-gray-700" />
-        </div>
-
-        <div className="flex gap-2 justify-end">
-          <button className="px-3 py-1 rounded border" onClick={onClose}>Cancelar</button>
-          <button
-            className="px-3 py-1 rounded bg-green-600"
-            onClick={() => {
-              if (!name) return alert("Coloque seu nome");
-              onConfirm(name);
-            }}
-          >
-            Confirmar pagamento (simulado)
-          </button>
-        </div>
-
-        <div className="text-xs text-gray-500 mt-3">Importante: este é um fluxo de demonstração. Para integrar PIX real, crie um endpoint backend que gere payloads/QR e confirme pagamentos via notificações (webhooks) do provedor.</div>
-      </div>
-    </div>
-  );
-}
-
-function OrdersList({ orders, onMessage, onReview }) {
-  const [openOrderId, setOpenOrderId] = useState(null);
-  const [msgText, setMsgText] = useState("");
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-
-  function send() {
-    if (!msgText.trim()) return;
-    onMessage(openOrderId, "Cliente", msgText.trim());
-    setMsgText("");
-  }
-
-  function submitReviewLocal() {
-    if (!openOrderId) return;
-    onReview(openOrderId, rating, comment);
-    setComment("");
-  }
-
-  return (
-    <div>
-      {orders.length === 0 && <div className="text-gray-400">Você não tem pedidos ainda.</div>}
-      <div className="space-y-3">
-        {orders.map((ord) => (
-          <div key={ord.id} className="bg-gray-800 p-3 rounded">
-            <div className="flex justify-between items-center">
-              <div>
-                <div className="font-semibold">{ord.title}</div>
-                <div className="text-sm text-gray-400">{ord.buyerName} • {new Date(ord.createdAt).toLocaleString()}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm">{ord.amount.toFixed(2).replace('.', ',')} BRL</div>
-                <div className="text-xs text-green-300">{ord.status}</div>
-                <button onClick={() => setOpenOrderId(ord.id)} className="mt-2 bg-indigo-600 px-3 py-1 rounded text-sm">Abrir Chamado</button>
-              </div>
-            </div>
-
-            {openOrderId === ord.id && (
-              <div className="mt-3 border-t border-gray-700 pt-3">
-                <div className="max-h-40 overflow-auto space-y-2">
-                  {ord.messages.map((m, i) => (
-                    <div key={i} className={`p-2 rounded ${m.from === 'system' ? 'bg-gray-700' : 'bg-gray-900'}`}>
-                      <div className="text-xs text-gray-400">{m.from}</div>
-                      <div className="text-sm">{m.text}</div>
-                      <div className="text-xs text-gray-500">{new Date(m.at).toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-3 flex gap-2">
-                  <input className="flex-1 p-2 rounded bg-gray-900 border border-gray-700" value={msgText} onChange={(e) => setMsgText(e.target.value)} />
-                  <button onClick={send} className="px-3 py-1 bg-green-600 rounded">Enviar</button>
-                </div>
-
-                <div className="mt-3">
-                  <div className="text-sm">Avaliar pedido</div>
-                  <div className="flex gap-2 items-center mt-2">
-                    <select value={rating} onChange={(e) => setRating(Number(e.target.value))} className="p-2 rounded bg-gray-900">
-                      {[5,4,3,2,1].map(v => <option key={v} value={v}>{v} estrela(s)</option>)}
-                    </select>
-                    <input value={comment} onChange={(e) => setComment(e.target.value)} className="flex-1 p-2 rounded bg-gray-900" placeholder="Comentário" />
-                    <button onClick={submitReviewLocal} className="px-3 py-1 bg-blue-600 rounded">Salvar</button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ReviewsList({ reviews, products }) {
-  if (!reviews || reviews.length === 0) return <div className="text-gray-400">Sem avaliações ainda.</div>;
-  return (
-    <div className="space-y-3">
-      {reviews.map(r => (
-        <div key={r.id} className="bg-gray-800 p-3 rounded">
-          <div className="flex justify-between">
-            <div>
-              <div className="font-semibold">{products.find(p=>p.id===r.productId)?.title || 'Produto'}</div>
-              <div className="text-sm text-gray-400">{r.by} • {new Date(r.at).toLocaleString()}</div>
-            </div>
-            <div className="text-yellow-300">{r.rating}★</div>
-          </div>
-          <div className="mt-2 text-sm text-gray-200">{r.comment}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function AdminPanel({ authed, onLogin, products, onAdd, onEdit, onDelete }) {
-  const [password, setPassword] = useState("");
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ title: "", subtitle: "", priceBR: "", priceLabel: "", stock: 0 });
-
-  function startAdd() {
-    setEditing(null);
-    setForm({ title: "", subtitle: "", priceBR: "", priceLabel: "", stock: 0 });
-  }
-
-  function startEdit(p) {
-    setEditing(p.id);
-    setForm({ title: p.title, subtitle: p.subtitle, priceBR: p.priceBR, priceLabel: p.priceLabel || `R$ ${p.priceBR}` , stock: p.stock });
-  }
-
-  function save() {
-    if (editing) {
-      onEdit(editing, { ...form, priceBR: Number(form.priceBR), priceLabel: `R$ ${Number(form.priceBR).toFixed(2).replace('.', ',')}` });
-    } else {
-      onAdd({ ...form, priceBR: Number(form.priceBR), priceLabel: `R$ ${Number(form.priceBR).toFixed(2).replace('.', ',')}` });
+    h1 {
+      color: #ff00ff;
+      font-size: 2em;
     }
-    setEditing(null);
-  }
 
-  if (!authed) {
-    return (
-      <div className="bg-gray-800 rounded p-4 max-w-md">
-        <h3 className="text-lg font-semibold mb-2">Login Admin</h3>
-        <input className="w-full p-2 rounded bg-gray-900 mb-2" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <div className="flex gap-2">
-          <button className="px-3 py-1 bg-indigo-600 rounded" onClick={() => onLogin(password)}>Entrar</button>
-          <div className="text-sm text-gray-400 self-center">Senha demo: <strong>admin123</strong></div>
-        </div>
-      </div>
-    );
-  }
+    .search-box {
+      margin: 15px auto;
+      width: 80%;
+    }
 
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold">Painel de Administração</h3>
-        <button className="px-3 py-1 bg-red-600 rounded" onClick={() => window.location.reload()}>Sair</button>
-      </div>
+    .search-box input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      outline: none;
+      background: #222;
+      color: #fff;
+      font-size: 1em;
+      box-shadow: 0 0 10px #ff00ff66;
+    }
 
-      <div className="bg-gray-800 p-4 rounded">
-        <div className="mb-4 flex gap-2">
-          <button className="px-3 py-1 bg-green-600 rounded" onClick={startAdd}>Novo Produto</button>
-        </div>
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      padding: 20px;
+    }
 
-        <div className="mb-6">
-          <h4 className="font-semibold mb-2">Produtos</h4>
-          <div className="space-y-3">
-            {products.map(p => (
-              <div key={p.id} className="flex justify-between items-center bg-gray-900 p-3 rounded">
-                <div>
-                  <div className="font-semibold">{p.title}</div>
-                  <div className="text-sm text-gray-400">{p.subtitle}</div>
-                  <div className="text-xs text-gray-500">{p.priceLabel} • Estoque: {p.stock}</div>
-                </div>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 bg-yellow-600 rounded" onClick={() => startEdit(p)}>Editar</button>
-                  <button className="px-3 py-1 bg-red-600 rounded" onClick={() => onDelete(p.id)}>Excluir</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+    .product {
+      background-color: #111;
+      border-radius: 15px;
+      padding: 15px;
+      box-shadow: 0 0 15px #ff00ff66;
+      transition: transform 0.3s;
+    }
 
-        <div className="bg-gray-900 p-3 rounded">
-          <h4 className="font-semibold mb-2">{editing ? 'Editar Produto' : 'Adicionar Produto'}</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input className="p-2 rounded bg-gray-800" placeholder="Título" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            <input className="p-2 rounded bg-gray-800" placeholder="Subtítulo" value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
-            <input className="p-2 rounded bg-gray-800" placeholder="Preço (ex: 9.99)" value={form.priceBR} onChange={(e) => setForm({ ...form, priceBR: e.target.value })} />
-            <input className="p-2 rounded bg-gray-800" placeholder="Estoque" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-          </div>
+    .product:hover {
+      transform: scale(1.05);
+    }
 
-          <div className="mt-3 flex gap-2 justify-end">
-            <button className="px-3 py-1 border rounded" onClick={() => { setEditing(null); setForm({ title: '', subtitle: '', priceBR: '', stock: 0 }); }}>Cancelar</button>
-            <button className="px-3 py-1 bg-blue-600 rounded" onClick={save}>Salvar</button>
-          </div>
-        </div>
-      </div>
+    .product h3 {
+      color: #ff00ff;
+      font-size: 1.3em;
+    }
 
-      <div className="mt-4 text-sm text-gray-400">Observação: este painel é front-end e salva dados no seu navegador (localStorage). Para multiusuário e segurança, crie um backend com autenticação.</div>
+    .price {
+      color: #ccc;
+      font-size: 1.2em;
+      margin: 10px 0;
+      font-weight: bold;
+    }
+
+    .btn-whatsapp {
+      display: inline-block;
+      background-color: #25D366;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+
+    .btn-whatsapp:hover {
+      background-color: #1eb15d;
+    }
+
+    footer {
+      background-color: #111;
+      color: #ccc;
+      padding: 15px;
+      font-size: 0.9em;
+      box-shadow: 0 0 10px #ff00ff;
+    }
+
+    footer span {
+      color: #ff00ff;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🧙‍♂️ Loja Bruxin</h1>
+    <p>Os melhores Brainrots estão aqui! ✨</p>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Pesquisar produto...">
     </div>
-  );
-}
+  </header>
+
+  <main>
+    <div class="products" id="productList">
+      
+      <!-- Produtos -->
+      <div class="product" data-name="Sorte Infinita">
+        <h3>Sorte Infinita 🎁</h3>
+        <p>Secret aleatório de 1M a 30M.</p>
+        <p class="price">R$10</p>
+        <a href="https://wa.me/5589984658374?text=Ol%C3%A1!%20Gostaria%20de%20comprar%20a%20Sorte%20Infinita%20🎁" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Los Primos">
+        <h3>Los Primos 🔥</h3>
+        <p>Los Primos 341M/s</p>
+        <p class="price">R$200</p>
+        <a href="https://wa.me/5589984658374?text=Ol%C3%A1!%20Gostaria%20de%20comprar%20os%20Los%20Primos%20🔥" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Los Primos YingYang">
+        <h3>Los Primos YingYang ⚫⚪</h3>
+        <p>681M/s</p>
+        <p class="price">R$400</p>
+        <a href="https://wa.me/5589984658374?text=Ol%C3%A1!%20Quero%20comprar%20o%20Los%20Primos%20YingYang%20⚫⚪" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Los Combinasonas">
+        <h3>Los Combinasonas 💥</h3>
+        <p>195M/s</p>
+        <p class="price">R$120</p>
+        <a href="https://wa.me/5589984658374?text=Ol%C3%A1!%20Quero%20comprar%20o%20Los%20Combinasonas%20💥" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Los Job Job Rainbow">
+        <h3>Los Job Job Rainbow 🌈</h3>
+        <p>25M/s</p>
+        <p class="price">R$15</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Los%20Job%20Job%20Rainbow%20🌈" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Graipuss Medusa Candy">
+        <h3>Graipuss Medusa Candy 🟣</h3>
+        <p>9M/s</p>
+        <p class="price">R$5</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Graipuss%20Medusa%20Candy%20🟣" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Pot Hotpos Amarelo">
+        <h3>Pot Hotpos 🟡</h3>
+        <p>5M/s</p>
+        <p class="price">R$2,5</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Pot%20Hotpos%20🟡" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Pot Hotpos Azul">
+        <h3>Pot Hotpos 🔵</h3>
+        <p>12M/s</p>
+        <p class="price">R$7,5</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Pot%20Hotpos%20🔵" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Los Lock Block">
+        <h3>Los Lock Block 🧱</h3>
+        <p>Produto especial</p>
+        <p class="price">R$6</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Los%20Lock%20Block%20🧱" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+      <div class="product" data-name="Secret Misterioso">
+        <h3>Secret Misterioso ❓</h3>
+        <p>1M - 10M aleatório</p>
+        <p class="price">R$3</p>
+        <a href="https://wa.me/5589984658374?text=Quero%20comprar%20o%20Secret%20Misterioso%20❓" class="btn-whatsapp">Comprar no WhatsApp</a>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>
+    © 2025 Loja Bruxin. Em breve mais estoque atualizado para vocês⚠️  
+    <br>Feito com 💜 por <span>Bruxin</span>.
+  </footer>
+
+  <script>
+    const searchInput = document.getElementById("searchInput");
+    const products = document.querySelectorAll(".product");
+
+    searchInput.addEventListener("input", () => {
+      const value = searchInput.value.toLowerCase();
+      products.forEach(prod => {
+        prod.style.display = prod.dataset.name.toLowerCase().includes(value) ? "block" : "none";
+      });
+    });
+  </script>
+
+</body>
+</html>
