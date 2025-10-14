@@ -1,3 +1,771 @@
+/*
+UltimaxGG - Loja de itens de jogos (React + Firebase)
+Single-file React app for preview/deployment.
+
+O QUE TEM AQUI (VERSÃO ATUALIZADA):
+- Loja pública (vitrine) com listagem de produtos
+- Página de produto com botão Comprar -> cria pedido e mostra instruções PIX + QR
+- Chat por pedido (cliente <-> vendedor) usando Firestore
+- Painel Admin (rota /admin) com login (email/senha via Firebase Auth)
+  - CRUD de produtos (adicionar imagem, título, preço, descrição)
+  - Ver pedidos e entrar no chat do pedido para responder
+  - Moderar avaliações (ver/excluir)
+- Sistema de Avaliações: clientes podem enviar estrelas (1-5) + comentário
+- Contador de Vendas: incrementa salesCount quando pedido é marcado como pago
+- Dashboard Admin com resumo: total produtos, vendas totais, média de avaliações
+
+IMPORTANTE — CONFIGURAÇÃO necessária (siga os passos no README abaixo):
+1) Crie um projeto no Firebase (https://console.firebase.google.com)
+2) Ative: Authentication (Email/Password), Firestore Database (modo de produção ou teste), Storage
+3) Copie as credenciais do Firebase e cole em FIREBASE_CONFIG abaixo
+4) Configure sua chave PIX/identificador em PIX_KEY (string) para exibir aos clientes
+5) Deploy: Vercel ou Netlify (ex: `npm run build` e deploy). Veja instruções mais abaixo.
+
+=============================================================================
+NOTAS RÁPIDAS SOBRE A NOVA LÓGICA
+- Reviews ficam em: products/{productId}/reviews/{reviewId}
+- Sales count é um campo no documento do produto: product.salesCount (number)
+- Quando admin marca pedido como 'completed' ou 'paid', incrementa product.salesCount em +1
+- Dashboard calcula média de avaliações lendo todas as reviews (pode custar leituras em Firestore; otimizar depois com agregações)
+
+=============================================================================
+*/
+
+import React, {useEffect, useState} from "react";
+import { createRoot } from 'react-dom/client';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Link,
+  useNavigate,
+  useParams
+} from 'react-router-dom';
+
+// FIREBASE SDK
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  onSnapshot,
+  updateDoc,
+  deleteDoc,
+  orderBy,
+  runTransaction,
+  serverTimestamp
+} from 'firebase/firestore';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
+
+// ----------------- CONFIGURE AQUI -----------------
+const FIREBASE_CONFIG = {
+  apiKey: "FIREBASE_API_KEY",
+  authDomain: "FIREBASE_AUTH_DOMAIN",
+  projectId: "FIREBASE_PROJECT_ID",
+  storageBucket: "FIREBASE_STORAGE_BUCKET",
+  messagingSenderId: "FIREBASE_MESSAGING_SENDER_ID",
+  appId: "FIREBASE_APP_ID"
+};
+
+const PIX_KEY = "SEU_PIX_AQUI@exemplo.com"; // coloque sua chave PIX (CPF/CNPJ, e-mail ou EVP)
+const STORE_NAME = "UltimaxGG";
+// --------------------------------------------------
+
+// init firebase
+const app = initializeApp(FIREBASE_CONFIG);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// utility: nice currency
+const formatBRL = v => {
+  if (v==null) return "R$ 0,00";
+  return v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+};
+
+function App(){
+  return (
+    <Router>
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white font-sans">
+        <Header />
+        <main className="p-4 max-w-5xl mx-auto">
+          <Routes>
+            <Route path="/" element={<Home/>} />
+            <Route path="/product/:id" element={<ProductPage/>} />
+            <Route path="/checkout/:id" element={<Checkout/>} />
+            <Route path="/chat/:orderId" element={<OrderChat/>} />
+            <Route path="/vendedor" element={<SellerProfile/>} />
+            <Route path="/admin/*" element={<AdminRoutes/>} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
+    </Router>
+  );
+}
+
+function Header(){
+  return (
+    <header className="py-4 border-b border-gray-800">
+      <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <Link to="/" className="text-2xl font-bold">{STORE_NAME}</Link>
+        <nav className="flex gap-2 items-center">
+          <Link to="/">Loja</Link>
+          <Link to="/vendedor" className="ml-2 text-sm text-gray-300">Sobre a loja</Link>
+          <Link to="/admin" className="ml-4 px-3 py-1 rounded bg-indigo-600 text-sm">Painel Admin</Link>
+        </nav>
+      </div>
+    </header>
+  );
+}
+
+function Footer(){
+  return (
+    <footer className="mt-12 py-8 text-center text-sm text-gray-400">&copy; {new Date().getFullYear()} {STORE_NAME} — Pix: {PIX_KEY}</footer>
+  );
+}
+
+// --------- Home / Product grid (shows rating + salesCount) ---------
+function Home(){
+  const [products, setProducts] = useState([]);
+  useEffect(()=>{
+    const q = query(collection(db, 'products'), orderBy('createdAt','desc'));
+    const unsub = onSnapshot(q, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push({id:d.id, ...d.data()}));
+      setProducts(arr);
+    });
+    return ()=>unsub();
+  },[]);
+
+  return (
+    <div>
+      <section className="mb-6">
+        <div className="text-sm text-gray-300">Novas contas todos os dias às 13h00</div>
+      </section>
+
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {products.map(p=> (
+          <div key={p.id} className="bg-gray-800 rounded-lg overflow-hidden shadow-md">
+            <img src={p.image || 'https://via.placeholder.com/400'} alt="produto" className="w-full h-40 object-cover" />
+            <div className="p-3">
+              <h3 className="font-semibold">{p.title}</h3>
+              <div className="text-xs text-gray-400 h-10 overflow-hidden">{p.subtitle}</div>
+              <div className="mt-2 flex items-center justify-between">
+                <div>
+                  <div className="font-bold">{formatBRL(p.price)}</div>
+                  <div className="text-xs text-gray-400">{p.salesCount || 0} vendidos</div>
+                </div>
+                <div className="text-sm text-yellow-300">{renderStarsInline(p.avgRating)}</div>
+              </div>
+              <div className="mt-2 flex justify-between items-center">
+                <Link to={`/product/${p.id}`} className="px-3 py-1 bg-white text-black rounded">Ver Detalhes</Link>
+                <div className="text-xs text-gray-400">{p.reviewCount || 0} avaliações</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function renderStarsInline(avg){
+  if(!avg) return '—';
+  const v = Math.round((avg||0)*10)/10;
+  return `⭐ ${v}/5`;
+}
+
+function ProductPage(){
+  const {id} = useParams();
+  const [product, setProduct] = useState(null);
+
+  useEffect(()=>{
+    if(!id) return;
+    const docRef = doc(db, 'products', id);
+    const unsub = onSnapshot(docRef, snap => {
+      if(snap.exists()) setProduct({id: snap.id, ...snap.data()});
+    });
+    return ()=>unsub();
+  },[id]);
+
+  if(!product) return <div>Carregando...</div>;
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-gray-800 rounded p-4">
+        <img src={product.image||'https://via.placeholder.com/800x400'} alt="" className="w-full h-64 object-cover rounded" />
+        <h1 className="text-2xl font-bold mt-4">{product.title}</h1>
+        <p className="text-gray-300 mt-2">{product.subtitle}</p>
+        <div className="mt-4 flex items-center justify-between">
+          <div>
+            <div className="text-2xl font-extrabold">{formatBRL(product.price)}</div>
+            <div className="text-sm text-gray-400">{product.salesCount || 0} vendidos — {product.reviewCount || 0} avaliações</div>
+            <div className="text-sm text-yellow-300">{renderStarsInline(product.avgRating)}</div>
+          </div>
+          <Link to={`/checkout/${product.id}`} className="px-4 py-2 bg-green-500 rounded">Comprar (PIX)</Link>
+        </div>
+
+        <div className="mt-6">
+          <h3 className="font-semibold">Avaliações dos clientes</h3>
+          <ProductReviews productId={product.id} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -------- Reviews component (list + submit form) --------
+function ProductReviews({productId}){
+  const [reviews, setReviews] = useState([]);
+  const [name, setName] = useState('');
+  const [stars, setStars] = useState(5);
+  const [text, setText] = useState('');
+
+  useEffect(()=>{
+    if(!productId) return;
+    const q = query(collection(db, `products/${productId}/reviews`), orderBy('createdAt','desc'));
+    const unsub = onSnapshot(q, snap=>{
+      const arr = []; snap.forEach(d=>arr.push({id:d.id, ...d.data()})); setReviews(arr);
+    });
+    return ()=>unsub();
+  },[productId]);
+
+  async function submitReview(){
+    if(!name || !text) return alert('Coloque seu nome e comentário');
+    const ref = collection(db, `products/${productId}/reviews`);
+    await addDoc(ref, {name, stars: Number(stars), text, createdAt: new Date()});
+
+    // Atualizar contadores agregados no documento do produto (transaction para evitar race)
+    const productRef = doc(db, 'products', productId);
+    try{
+      await runTransaction(db, async (t)=>{
+        const snap = await t.get(productRef);
+        if(!snap.exists()) return;
+        const prevCount = snap.data().reviewCount || 0;
+        const prevAvg = snap.data().avgRating || 0;
+        const newCount = prevCount + 1;
+        const newAvg = ((prevAvg * prevCount) + Number(stars)) / newCount;
+        t.update(productRef, { reviewCount: newCount, avgRating: newAvg });
+      });
+    }catch(e){ console.error('Erro atualizar agregados', e); }
+
+    setName(''); setStars(5); setText('');
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="grid gap-3">
+        <div>
+          <h4 className="font-semibold">Escreva uma avaliação</h4>
+          <input placeholder="Seu nome" value={name} onChange={e=>setName(e.target.value)} className="w-full mt-1 p-2 rounded bg-gray-900" />
+          <div className="mt-2 flex gap-2 items-center">
+            <label className="text-sm text-gray-300">Estrelas:</label>
+            <select value={stars} onChange={e=>setStars(e.target.value)} className="p-2 rounded bg-gray-900">
+              <option value={5}>5</option>
+              <option value={4}>4</option>
+              <option value={3}>3</option>
+              <option value={2}>2</option>
+              <option value={1}>1</option>
+            </select>
+          </div>
+          <textarea placeholder="Comentário" value={text} onChange={e=>setText(e.target.value)} className="w-full mt-2 p-2 rounded bg-gray-900" />
+          <div className="mt-2">
+            <button onClick={submitReview} className="px-3 py-1 bg-yellow-500 text-black rounded">Enviar avaliação</button>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="font-semibold">Últimas avaliações</h4>
+          <div className="mt-2 grid gap-2">
+            {reviews.slice(0,3).map(r=> (
+              <div key={r.id} className="bg-gray-900 p-3 rounded">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold">{r.name}</div>
+                  <div className="text-sm text-yellow-300">{Array.from({length:r.stars}).map((_,i)=>'⭐').join('')}</div>
+                </div>
+                <div className="text-sm text-gray-300 mt-1">{r.text}</div>
+              </div>
+            ))}
+            {reviews.length===0 && <div className="text-sm text-gray-400">Ainda não há avaliações.</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -------- Checkout: cria um pedido e mostra instruções PIX + QR --------
+function Checkout(){
+  const {id} = useParams();
+  const [product, setProduct] = useState(null);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(()=>{
+    if(!id) return;
+    const docRef = doc(db, 'products', id);
+    getDoc(docRef).then(snap => {
+      if(snap.exists()) setProduct({id:snap.id, ...snap.data()});
+    });
+  },[id]);
+
+  async function handleBuy(){
+    if(!name) return alert('Coloque seu nome');
+    // criar pedido
+    const order = {
+      productId: product.id,
+      productTitle: product.title,
+      price: product.price,
+      buyerName: name,
+      buyerPhone: phone,
+      status: 'pending',
+      createdAt: serverTimestamp()
+    };
+    const ref = await addDoc(collection(db, 'orders'), order);
+    // redireciona para chat do pedido (vendedor e comprador trocam mensagens lá)
+    navigate(`/chat/${ref.id}`);
+  }
+
+  if(!product) return <div>Carregando...</div>;
+
+  // QR via api qrserver -> data: podemos colocar texto com PIX key + valor + ref
+  const pixPayload = `PIX:${PIX_KEY};valor:${product.price}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pixPayload)}`;
+
+  return (
+    <div className="max-w-2xl mx-auto bg-gray-800 rounded p-4">
+      <h2 className="text-xl font-bold">Finalizar compra — {product.title}</h2>
+      <div className="mt-3">
+        <label className="block text-sm text-gray-300">Seu nome</label>
+        <input value={name} onChange={e=>setName(e.target.value)} className="w-full mt-1 p-2 rounded bg-gray-900" />
+      </div>
+      <div className="mt-3">
+        <label className="block text-sm text-gray-300">Telefone (opcional)</label>
+        <input value={phone} onChange={e=>setPhone(e.target.value)} className="w-full mt-1 p-2 rounded bg-gray-900" />
+      </div>
+      <div className="mt-4 flex gap-2">
+        <button onClick={handleBuy} className="px-4 py-2 bg-green-500 rounded">Comprar — abrir chat</button>
+        <Link to={`/product/${product.id}`} className="px-4 py-2 bg-gray-700 rounded">Voltar</Link>
+      </div>
+
+      <div className="mt-6 p-4 bg-gray-900 rounded">
+        <h3 className="font-semibold">PIX — instruções</h3>
+        <p className="text-sm text-gray-400">Chave PIX: <strong>{PIX_KEY}</strong></p>
+        <p className="text-sm text-gray-400">Valor: <strong>{formatBRL(product.price)}</strong></p>
+        <div className="mt-3">
+          <img src={qrUrl} alt="pix-qr" className="w-44 h-44 object-contain border rounded" />
+        </div>
+        <p className="mt-2 text-xs text-gray-500">Após o pagamento, envie o comprovante no chat com o vendedor.</p>
+      </div>
+    </div>
+  );
+}
+
+// -------- Order Chat (cliente <-> vendedor) --------
+function OrderChat(){
+  const {orderId} = useParams();
+  const [order, setOrder] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+
+  useEffect(()=>{
+    if(!orderId) return;
+    const orderRef = doc(db, 'orders', orderId);
+    const unsubOrder = onSnapshot(orderRef, snap => {
+      if(snap.exists()) setOrder({id: snap.id, ...snap.data()});
+    });
+
+    const msgsRef = collection(db, `orders/${orderId}/messages`);
+    const q = query(msgsRef, orderBy('createdAt'));
+    const unsubMsg = onSnapshot(q, snap => {
+      const arr = [];
+      snap.forEach(d => arr.push({id:d.id, ...d.data()}));
+      setMessages(arr);
+    });
+
+    return ()=>{unsubOrder(); unsubMsg();}
+  },[orderId]);
+
+  async function send(){
+    if(!text) return;
+    await addDoc(collection(db, `orders/${orderId}/messages`), {
+      text,
+      from: 'cliente',
+      createdAt: serverTimestamp()
+    });
+    setText('');
+  }
+
+  if(!order) return <div>Carregando...</div>;
+
+  return (
+    <div className="max-w-2xl mx-auto bg-gray-800 rounded p-4">
+      <h2 className="font-bold">Chat do pedido — {order.productTitle}</h2>
+      <div className="text-sm text-gray-400">Pedido: {orderId} — Status: {order.status}</div>
+
+      <div className="mt-4 h-72 overflow-auto bg-gray-900 p-3 rounded flex flex-col gap-2">
+        {messages.map(m=> (
+          <div key={m.id} className={m.from==='cliente' ? 'self-start bg-indigo-600 p-2 rounded' : 'self-end bg-gray-700 p-2 rounded'}>
+            <div className="text-sm">{m.text}</div>
+            <div className="text-xs text-gray-300 mt-1">{m.from} — {m.createdAt?.toDate ? m.createdAt.toDate().toLocaleString() : ''}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <input value={text} onChange={e=>setText(e.target.value)} placeholder="Escreva uma mensagem" className="flex-1 p-2 rounded bg-gray-900" />
+        <button onClick={send} className="px-3 py-2 bg-indigo-600 rounded">Enviar</button>
+      </div>
+    </div>
+  );
+}
+
+// -------- Seller profile (public) --------
+function SellerProfile(){
+  const [stats, setStats] = useState({products:0, sales:0, avgRating:0});
+
+  useEffect(()=>{
+    // fetch basic aggregates (note: naive approach - reads all products)
+    async function load(){
+      const snap = await getDocs(collection(db,'products'));
+      let totalProducts = 0; let totalSales = 0; let sumRating = 0; let countRating = 0;
+      snap.forEach(d=>{
+        totalProducts++;
+        const data = d.data();
+        totalSales += data.salesCount || 0;
+        if(data.avgRating){ sumRating += data.avgRating * (data.reviewCount || 1); countRating += (data.reviewCount || 0); }
+      });
+      const avg = countRating? (sumRating / countRating):0;
+      setStats({products: totalProducts, sales: totalSales, avgRating: Math.round(avg*10)/10});
+    }
+    load();
+  },[]);
+
+  return (
+    <div className="max-w-3xl mx-auto bg-gray-800 p-4 rounded">
+      <div className="flex items-center gap-4">
+        <div className="w-20 h-20 rounded-full bg-gray-700 flex items-center justify-center text-2xl font-bold">U</div>
+        <div>
+          <h2 className="text-2xl font-bold">{STORE_NAME}</h2>
+          <div className="text-sm text-gray-300">{stats.products} produtos • {stats.sales} vendas totais • ⭐ {stats.avgRating}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 text-gray-300">Bem-vindo à loja oficial UltimaxGG — aqui você encontra contas com Brainrot e outros itens. Compras via PIX. Após o pagamento, envie o comprovante no chat do pedido.</div>
+    </div>
+  );
+}
+
+// -------- Admin Routes --------
+function AdminRoutes(){
+  const [user, setUser] = useState(null);
+  useEffect(()=> onAuthStateChanged(auth, u=> setUser(u)), []);
+  if(!user) return <AdminLogin />;
+  return (
+    <Routes>
+      <Route path="/" element={<AdminHome user={user}/>} />
+      <Route path="/products" element={<AdminProducts/>} />
+      <Route path="/orders" element={<AdminOrders/>} />
+      <Route path="/reviews" element={<AdminReviews/>} />
+    </Routes>
+  );
+}
+
+function AdminLogin(){
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+
+  async function login(){
+    try{
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/admin');
+    } catch(e){
+      alert('Erro login: '+e.message);
+    }
+  }
+
+  return (
+    <div className="max-w-md mx-auto bg-gray-800 p-6 rounded">
+      <h2 className="text-xl font-bold">Login Admin</h2>
+      <div className="mt-3">
+        <input placeholder="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-2 rounded bg-gray-900" />
+      </div>
+      <div className="mt-2">
+        <input placeholder="senha" type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-2 rounded bg-gray-900" />
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button onClick={login} className="px-4 py-2 bg-indigo-600 rounded">Entrar</button>
+      </div>
+      <div className="mt-4 text-sm text-gray-400">Se é a primeira vez, crie um usuário direto no console do Firebase (Authentication → Users → Add user).</div>
+    </div>
+  );
+}
+
+function AdminHome({user}){
+  const navigate = useNavigate();
+  async function logout(){ await signOut(auth); navigate('/'); }
+
+  const [summary, setSummary] = useState({products:0, sales:0, avgRating:0});
+
+  useEffect(()=>{
+    // load summary (reads all products - fine for small stores)
+    async function loadSummary(){
+      const snap = await getDocs(collection(db,'products'));
+      let products = 0; let sales=0; let sumRating=0; let countRating=0;
+      snap.forEach(d=>{
+        products++;
+        const data = d.data();
+        sales += data.salesCount || 0;
+        if(data.avgRating){ sumRating += (data.avgRating * (data.reviewCount||1)); countRating += (data.reviewCount||0); }
+      });
+      const avg = countRating? Math.round((sumRating/countRating)*10)/10 : 0;
+      setSummary({products, sales, avgRating: avg});
+    }
+    loadSummary();
+  },[]);
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Painel Admin</h2>
+        <div className="flex gap-2">
+          <button onClick={()=>navigate('/admin/products')} className="px-3 py-1 bg-gray-700 rounded">Produtos</button>
+          <button onClick={()=>navigate('/admin/orders')} className="px-3 py-1 bg-gray-700 rounded">Pedidos</button>
+          <button onClick={()=>navigate('/admin/reviews')} className="px-3 py-1 bg-gray-700 rounded">Avaliações</button>
+          <button onClick={logout} className="px-3 py-1 bg-red-600 rounded">Sair</button>
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-gray-800 p-4 rounded">
+          <div className="text-sm text-gray-400">Produtos cadastrados</div>
+          <div className="text-2xl font-bold">{summary.products}</div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded">
+          <div className="text-sm text-gray-400">Vendas totais</div>
+          <div className="text-2xl font-bold">{summary.sales}</div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded">
+          <div className="text-sm text-gray-400">Média de avaliações</div>
+          <div className="text-2xl font-bold">⭐ {summary.avgRating}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminProducts(){
+  const [products, setProducts] = useState([]);
+  const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [price, setPrice] = useState(9.99);
+  const [file, setFile] = useState(null);
+
+  useEffect(()=>{
+    const q = query(collection(db, 'products'), orderBy('createdAt','desc'));
+    const unsub = onSnapshot(q, snap => {
+      const arr = []; snap.forEach(d=>arr.push({id:d.id, ...d.data()})); setProducts(arr);
+    });
+    return ()=>unsub();
+  },[]);
+
+  async function add(){
+    let imageUrl = '';
+    if(file){
+      const ref = storageRef(storage, `products/${Date.now()}_${file.name}`);
+      await uploadBytes(ref, file);
+      imageUrl = await getDownloadURL(ref);
+    }
+    await addDoc(collection(db, 'products'), {
+      title, subtitle, price: Number(price), image: imageUrl, createdAt: serverTimestamp(), salesCount: 0, reviewCount:0, avgRating:0
+    });
+    setTitle(''); setSubtitle(''); setPrice(9.99); setFile(null);
+  }
+
+  async function remove(id){ if(!confirm('Remover produto?')) return; await deleteDoc(doc(db,'products',id)); }
+
+  return (
+    <div>
+      <h3 className="text-xl font-bold">Produtos</h3>
+      <div className="mt-3 bg-gray-800 p-3 rounded">
+        <input placeholder="Título" value={title} onChange={e=>setTitle(e.target.value)} className="w-full p-2 rounded bg-gray-900" />
+        <input placeholder="Subtítulo" value={subtitle} onChange={e=>setSubtitle(e.target.value)} className="w-full p-2 rounded bg-gray-900 mt-2" />
+        <input placeholder="Preço" type="number" value={price} onChange={e=>setPrice(e.target.value)} className="w-full p-2 rounded bg-gray-900 mt-2" />
+        <input type="file" onChange={e=>setFile(e.target.files[0])} className="mt-2 text-sm" />
+        <div className="mt-2 flex gap-2">
+          <button onClick={add} className="px-3 py-1 bg-green-600 rounded">Adicionar</button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        {products.map(p=> (
+          <div key={p.id} className="bg-gray-800 p-3 rounded flex gap-3 items-center">
+            <img src={p.image||'https://via.placeholder.com/120'} alt="" className="w-24 h-24 object-cover rounded" />
+            <div className="flex-1">
+              <div className="font-bold">{p.title}</div>
+              <div className="text-sm text-gray-400">{p.subtitle}</div>
+              <div className="text-sm mt-1">{formatBRL(p.price)} • {p.salesCount || 0} vendidos • ⭐ {p.avgRating || 0}</div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button onClick={()=>remove(p.id)} className="px-2 py-1 bg-red-600 rounded text-sm">Remover</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminOrders(){
+  const [orders, setOrders] = useState([]);
+  const navigate = useNavigate();
+  useEffect(()=>{
+    const q = query(collection(db,'orders'), orderBy('createdAt','desc'));
+    const unsub = onSnapshot(q, snap => {
+      const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()})); setOrders(arr);
+    });
+    return ()=>unsub();
+  },[]);
+
+  async function setStatus(id, s, order){
+    await updateDoc(doc(db,'orders',id), {status: s});
+    // quando marcar como completed/paid, incrementa salesCount do produto
+    if(s === 'completed' || s === 'paid'){
+      const productRef = doc(db, 'products', order.productId);
+      try{
+        await runTransaction(db, async (t)=>{
+          const snap = await t.get(productRef);
+          if(!snap.exists()) return;
+          const prev = snap.data().salesCount || 0;
+          t.update(productRef, { salesCount: prev + 1 });
+        });
+      }catch(e){ console.error('Erro ao incrementar salesCount', e); }
+    }
+  }
+
+  return (
+    <div>
+      <h3 className="text-xl font-bold">Pedidos</h3>
+      <div className="mt-3 grid gap-3">
+        {orders.map(o=> (
+          <div key={o.id} className="bg-gray-800 p-3 rounded flex items-center justify-between">
+            <div>
+              <div className="font-bold">{o.productTitle}</div>
+              <div className="text-sm text-gray-400">{o.buyerName} — {formatBRL(o.price)}</div>
+              <div className="text-xs text-gray-500">{o.id}</div>
+            </div>
+            <div className="flex gap-2 items-center">
+              <button onClick={()=>navigate(`/admin/orders/${o.id}`)} className="px-2 py-1 bg-gray-700 rounded">Abrir Chat</button>
+              <button onClick={()=>setStatus(o.id,'completed', o)} className="px-2 py-1 bg-green-600 rounded">Marcar Pago</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminReviews(){
+  const [reviews, setReviews] = useState([]);
+
+  useEffect(()=>{
+    // load recent reviews across all products (naive, paginar depois)
+    async function load(){
+      const productsSnap = await getDocs(collection(db,'products'));
+      const all = [];
+      for(const p of productsSnap.docs){
+        const pid = p.id;
+        const revSnap = await getDocs(query(collection(db, `products/${pid}/reviews`), orderBy('createdAt','desc')));
+        revSnap.forEach(r=> all.push({id: r.id, productId: pid, productTitle: p.data().title, ...r.data()}));
+      }
+      // order by createdAt desc
+      all.sort((a,b)=> new Date(b.createdAt?.toDate?.() || b.createdAt) - new Date(a.createdAt?.toDate?.() || a.createdAt));
+      setReviews(all);
+    }
+    load();
+  },[]);
+
+  async function removeReview(productId, reviewId){
+    if(!confirm('Remover avaliação?')) return;
+    await deleteDoc(doc(db, `products/${productId}/reviews/${reviewId}`));
+    // TODO: atualizar agregados (reviewCount e avgRating) - pode recalcular ou decrementar (implementei recálculo rápido abaixo)
+    await recalcAggregates(productId);
+    setReviews(r=> r.filter(x=> !(x.id===reviewId && x.productId===productId)));
+  }
+
+  async function recalcAggregates(productId){
+    const revSnap = await getDocs(collection(db, `products/${productId}/reviews`));
+    let sum=0; let cnt=0;
+    revSnap.forEach(r=>{ sum += r.data().stars; cnt++; });
+    const productRef = doc(db,'products',productId);
+    if(cnt===0){ await updateDoc(productRef, { reviewCount:0, avgRating:0 }); }
+    else{ await updateDoc(productRef, { reviewCount: cnt, avgRating: sum / cnt }); }
+  }
+
+  return (
+    <div>
+      <h3 className="text-xl font-bold">Avaliações (moderação)</h3>
+      <div className="mt-3 grid gap-3">
+        {reviews.map(r=> (
+          <div key={r.productId + '_' + r.id} className="bg-gray-800 p-3 rounded">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-bold">{r.name} — <span className="text-sm text-gray-400">{r.productTitle}</span></div>
+                <div className="text-sm text-yellow-300">{Array.from({length:r.stars}).map((_,i)=>'⭐').join('')}</div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={()=>removeReview(r.productId, r.id)} className="px-2 py-1 bg-red-600 rounded">Excluir</button>
+              </div>
+            </div>
+            <div className="text-sm text-gray-300 mt-2">{r.text}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Render
+const container = document.getElementById('root');
+if(container){
+  const root = createRoot(container);
+  root.render(<App />);
+}
+
+/*
+README / INSTRUÇÕES DE DEPLOY (resumido abaixo - mantenho o README completo no canvas original)
+
+1) Criar projeto no Firebase
+2) Substitua FIREBASE_CONFIG neste arquivo com as credenciais do seu projeto Firebase.
+3) npm create vite@latest ultimaxgg -- --template react
+   npm install
+   npm install firebase react-router-dom
+   cole este arquivo em src/App.jsx e ajuste main.jsx para importar App.
+4) Teste local: npm run dev
+5) Crie user admin no Firebase Authentication
+6) Deploy: Vercel importando o repositório GitHub
+
+ATENÇÃO: após deploy, verifique as regras do Firestore/Storage para segurança.
+
+*/
 <!doctype html>
 <html lang="pt-BR">
 <head>
