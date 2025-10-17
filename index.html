@@ -1,188 +1,586 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Loja Bruxin</title>
-<style>
-  :root{
-    --bg:#070707;
-    --card:#0e0e0e;
-    --accent:#ff00cc;
-    --muted:#cfcfcf;
-    --wh:#ffffff;
-    --wa:#25D366;
-    --shadow: 0 8px 30px rgba(255,0,170,0.15);
+// UltimaxStoreFirebase.jsx
+import React, { useEffect, useState } from "react";
+
+/*
+  COLOQUE SUA CONFIGURAÇÃO FIREBASE ABAIXO
+  (copie do console.firebase.google.com)
+*/
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from "firebase/auth";
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  addDoc,
+  onSnapshot,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+} from "firebase/firestore";
+import { getStorage, ref as sRef, uploadString, getDownloadURL } from "firebase/storage";
+
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MSG_SENDER_ID",
+  appId: "YOUR_APP_ID",
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// Configurações da loja
+const ADMIN_EMAIL = "ultimaxadm@gmail.com";
+const WHATSAPP_FULL_NUMBER = "5598984658374"; // ← Número corrigido (sem espaços)
+const DISCORD_INVITE = "https://discord.gg/u3SQ54ZP"; // ← Sem espaço no final
+
+export default function UltimaxStoreFirebase() {
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [notification, setNotification] = useState(""); // para mensagens amigáveis
+
+  const [primaryColor, setPrimaryColor] = useState("#0ea5e9");
+  const [bgColor, setBgColor] = useState("#000000");
+  const [textColor, setTextColor] = useState("#ffffff");
+
+  const [products, setProducts] = useState([]);
+  const [queryText, setQueryText] = useState("");
+  const [platformBalance, setPlatformBalance] = useState(0);
+
+  // Limpa notificação após 3s
+  useEffect(() => {
+    if (notification) {
+      const t = setTimeout(() => setNotification(""), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [notification]);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      if (u) {
+        const userDoc = doc(db, "users", u.uid);
+        const snap = await getDoc(userDoc);
+        if (snap.exists()) {
+          const data = snap.data();
+          setIsAdmin(!!data?.role && data.role === "admin");
+        } else {
+          const role = u.email === ADMIN_EMAIL ? "admin" : "user";
+          await setDoc(userDoc, { email: u.email, role, displayName: u.displayName || null });
+          setIsAdmin(role === "admin");
+        }
+      } else {
+        setIsAdmin(false);
+      }
+      setLoadingAuth(false);
+    });
+    return () => unsub();
+  }, []);
+
+  // realtime products
+  useEffect(() => {
+    const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setProducts(arr);
+    });
+    return () => unsub();
+  }, []);
+
+  // platform balance
+  useEffect(() => {
+    const pDoc = doc(db, "platform", "balance");
+    const unsub = onSnapshot(pDoc, (snap) => {
+      if (snap.exists()) setPlatformBalance(snap.data().amount || 0);
+      else setPlatformBalance(0);
+    });
+    return () => unsub();
+  }, []);
+
+  // Auth helpers
+  async function signInWithGoogle() {
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      setNotification("Erro Google: " + (e.message || "tente novamente"));
+    }
   }
-  *{box-sizing:border-box}
-  body{
-    margin:0;font-family:Inter,system-ui,Arial,Helvetica,sans-serif;
-    background:linear-gradient(180deg,#000 0%, #060006 100%);
-    color:var(--muted);
-    -webkit-font-smoothing:antialiased;
+
+  async function registerWithEmail(email, password, displayName = "") {
+    if (!email || !password) return setNotification("Preencha e-mail e senha");
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      if (cred.user) {
+        const userDoc = doc(db, "users", cred.user.uid);
+        const role = email === ADMIN_EMAIL ? "admin" : "user";
+        await setDoc(userDoc, { email, displayName, role });
+        setNotification("Conta criada com sucesso!");
+      }
+    } catch (e) {
+      setNotification("Erro registro: " + (e.message || "tente novamente"));
+    }
   }
 
-  header{padding:26px 16px 10px;text-align:center}
-  header h1{color:var(--accent);font-size:2.6rem;margin:0 0 6px}
-  header p{color:#f3f3f3;margin:0 0 12px}
-
-  .container{max-width:1100px;margin:0 auto;padding:10px 16px 80px}
-
-  /* search */
-  .search-wrap{display:flex;justify-content:center;margin:18px 0 26px}
-  .search{width:100%;max-width:560px;display:flex;gap:8px;align-items:center}
-  .search input[type="text"]{
-    width:100%;padding:12px 14px;border-radius:10px;border:0;background:#111;color:var(--muted);
-    box-shadow:0 6px 18px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.02);
-    font-size:1rem;
-  }
-  .search button{
-    background:var(--wa);color:var(--wh);border:0;padding:12px 14px;border-radius:10px;font-weight:700;cursor:pointer;
-    box-shadow:0 4px 12px rgba(0,0,0,0.5);
+  async function loginWithEmail(email, password) {
+    if (!email || !password) return setNotification("Preencha e-mail e senha");
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (e) {
+      setNotification("Erro login: " + (e.message || "credenciais inválidas"));
+    }
   }
 
-  /* grid 2 columns */
-  .grid{
-    display:grid;
-    grid-template-columns: repeat(2,1fr);
-    gap:22px;
-    align-items:start;
+  async function logout() {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      setNotification("Erro ao sair");
+    }
   }
-  @media(max-width:760px){ .grid{grid-template-columns:1fr} }
 
-  .card{
-    background:var(--card);
-    border-radius:16px;padding:22px;
-    box-shadow:var(--shadow), inset 0 0 0 2px rgba(255,0,170,0.03);
-    text-align:center;position:relative;overflow:hidden;
+  // Product CRUD
+  async function createProduct(prod) {
+    if (!isAdmin) return setNotification("Somente admins");
+    if (!prod.title?.trim()) return setNotification("Título é obrigatório");
+    await addDoc(collection(db, "products"), { ...prod, createdAt: new Date() });
+    setNotification("Produto criado!");
   }
-  .card h3{color:var(--accent);font-size:1.6rem;margin:6px 0 6px}
-  .card p.desc{color:#dcdcdc;margin:0 0 14px;font-size:0.95rem}
-  .price{color:#eee;font-weight:800;font-size:1.4rem;margin:8px 0 16px}
-  .btn{
-    display:inline-block;background:var(--wa);color:var(--wh);padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:700;
-    box-shadow:0 8px 18px rgba(37,211,102,0.14);
+
+  async function updateProduct(id, patch) {
+    if (!isAdmin) return setNotification("Somente admins");
+    await updateDoc(doc(db, "products", id), patch);
   }
-  .note{color:#dcdcdc;margin-top:14px;font-size:0.95rem}
 
-  /* footer */
-  footer{padding:28px 16px;text-align:center;color:#bdbdbd;margin-top:26px}
-  .product-meta{font-size:0.9rem;color:#cfcfcf;margin-bottom:6px}
+  async function deleteProduct(id) {
+    if (!isAdmin) return setNotification("Somente admins");
+    await deleteDoc(doc(db, "products", id));
+    setNotification("Produto excluído");
+  }
 
-  /* small helpers */
-  .flex{display:flex;gap:8px;align-items:center;justify-content:center}
-  .rating{font-size:0.9rem;color:#ffd166}
-  .badge{display:inline-block;padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.04);color:#fff;font-size:0.85rem}
-</style>
-</head>
-<body>
-<header>
-  <h1>🧙 Loja Bruxin</h1>
-  <p>Os melhores Brainrots estão aqui! ✨</p>
-</header>
+  // Buy flow
+  async function buyProduct(product) {
+    if (!user) return setNotification("Faça login para comprar");
+    if (product.stock <= 0) return setNotification("Produto esgotado");
+    try {
+      const pRef = doc(db, "products", product.id);
+      await updateDoc(pRef, { stock: product.stock - 1 });
 
-<div class="container">
+      const pDoc = doc(db, "platform", "balance");
+      const snap = await getDoc(pDoc);
+      const current = snap.exists() ? (snap.data().amount || 0) : 0;
+      await setDoc(pDoc, { amount: +(current + Number(product.price)).toFixed(2) });
 
-  <div class="search-wrap">
-    <div class="search" role="search">
-      <input id="search" type="text" placeholder="Pesquisar produto (ex: Los Primos, Secret, La cucaracha)..." />
-      <button id="clearSearch" title="Limpar">Limpar</button>
+      await addDoc(collection(db, "orders"), {
+        productId: product.id,
+        productTitle: product.title,
+        amount: Number(product.price),
+        buyerUid: user.uid,
+        buyerEmail: user.email,
+        status: "paid",
+        createdAt: new Date(),
+      });
+
+      setNotification("Compra registrada! Abrindo WhatsApp...");
+      window.open(
+        `https://wa.me/${WHATSAPP_FULL_NUMBER}?text=${encodeURIComponent(
+          `Olá, confirmei a compra do produto: ${product.title}`
+        )}`,
+        "_blank"
+      );
+    } catch (e) {
+      setNotification("Erro na compra: " + (e.message || "tente novamente"));
+    }
+  }
+
+  // Withdraw (admin)
+  async function withdrawToPix(pixKey) {
+    if (!isAdmin) return setNotification("Somente admins");
+    if (!pixKey?.trim()) return setNotification("Informe uma chave PIX");
+    const pDoc = doc(db, "platform", "balance");
+    const snap = await getDoc(pDoc);
+    const amount = snap.exists() ? (snap.data().amount || 0) : 0;
+    if (!amount || amount <= 0) return setNotification("Sem saldo disponível");
+    await addDoc(collection(db, "withdraws"), {
+      to: pixKey.trim(),
+      amount,
+      createdAt: new Date(),
+      by: user.email,
+    });
+    await setDoc(pDoc, { amount: 0 });
+    setNotification("Retirada registrada (simulada).");
+  }
+
+  // Upload image
+  async function uploadImageFile(file) {
+    return new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const dataUrl = e.target.result;
+          const key = `products/${Date.now()}_${file.name}`;
+          const ref = sRef(storage, key);
+          await uploadString(ref, dataUrl, "data_url");
+          const url = await getDownloadURL(ref);
+          res(url);
+        } catch (err) {
+          rej(err);
+        }
+      };
+      reader.onerror = rej;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function rateProduct(productId, rating) {
+    if (!user) return setNotification("Faça login para avaliar");
+    try {
+      await addDoc(collection(db, `products/${productId}/ratings`), {
+        rating,
+        by: user.uid,
+        createdAt: new Date(),
+      });
+      setNotification("Obrigado pela avaliação!");
+    } catch (e) {
+      setNotification("Erro ao avaliar");
+    }
+  }
+
+  const filtered = products.filter(p =>
+    (p.title + " " + (p.subtitle || "") + " " + (p.description || ""))
+      .toLowerCase()
+      .includes(queryText.toLowerCase())
+  );
+
+  if (loadingAuth) return <div className="p-6">Carregando autenticação...</div>;
+
+  return (
+    <div style={{ background: bgColor, color: textColor, minHeight: "100vh" }} className="p-4">
+      {/* Notificação flutuante */}
+      {notification && (
+        <div
+          style={{
+            position: "fixed",
+            top: "20px",
+            right: "20px",
+            background: "#111827",
+            color: "#fff",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            zIndex: 1000,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          }}
+        >
+          {notification}
+        </div>
+      )}
+
+      <div className="max-w-6xl mx-auto">
+        <header className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold" style={{ color: primaryColor }}>
+            Ultimax Store
+          </h1>
+          <div className="flex items-center gap-3">
+            <input
+              value={queryText}
+              onChange={(e) => setQueryText(e.target.value)}
+              placeholder="Pesquisar produtos..."
+              className="px-3 py-2 rounded bg-gray-800 text-white"
+            />
+            {user ? (
+              <div className="flex items-center gap-2">
+                <div className="text-sm">
+                  {user.email} {isAdmin && <strong>(Admin)</strong>}
+                </div>
+                <button onClick={logout} className="px-3 py-2 rounded border border-gray-600">
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={signInWithGoogle}
+                  className="px-3 py-2 rounded"
+                  style={{ background: primaryColor }}
+                >
+                  Entrar com Google
+                </button>
+                <button
+                  onClick={() => {
+                    const email = prompt("Email");
+                    const pass = prompt("Senha");
+                    if (email && pass) loginWithEmail(email, pass);
+                  }}
+                  className="px-3 py-2 rounded border border-gray-600"
+                >
+                  Entrar (E-mail)
+                </button>
+              </div>
+            )}
+          </div>
+        </header>
+
+        <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((p) => (
+            <div
+              key={p.id}
+              className="rounded-lg p-4 shadow-lg"
+              style={{ background: "#0b1220" }}
+            >
+              <div className="h-40 flex items-center justify-center">
+                {p.image ? (
+                  <img src={p.image} alt={p.title} className="object-contain h-full" />
+                ) : (
+                  <div className="text-sm opacity-70">Sem imagem</div>
+                )}
+              </div>
+              <h2 className="mt-2 font-semibold text-lg">{p.title}</h2>
+              <div className="text-sm opacity-80">{p.subtitle}</div>
+              <div className="mt-1 font-bold">R$ {Number(p.price).toFixed(2)}</div>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={() => buyProduct(p)}
+                  className="px-3 py-2 rounded"
+                  style={{ background: primaryColor }}
+                >
+                  Comprar
+                </button>
+                <button
+                  onClick={() =>
+                    window.open(
+                      `https://wa.me/${WHATSAPP_FULL_NUMBER}?text=${encodeURIComponent(
+                        `Quero pegar meu pedido: ${p.title}`
+                      )}`,
+                      "_blank"
+                    )
+                  }
+                  className="px-3 py-2 rounded border border-gray-600"
+                >
+                  Pega meu pedido (WhatsApp)
+                </button>
+                <button
+                  onClick={() => window.open(DISCORD_INVITE, "_blank")}
+                  className="px-3 py-2 rounded border border-gray-600"
+                >
+                  Pega meu pedido (Discord)
+                </button>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <div>Estoque: {p.stock}</div>
+                <div>Avaliação: {p.rating || "—"}</div>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <label className="text-xs">Avaliar:</label>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => rateProduct(p.id, n)}
+                    className="px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600"
+                  >
+                    {n}★
+                  </button>
+                ))}
+              </div>
+
+              {isAdmin && (
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={async () => {
+                      const title = prompt("Título", p.title);
+                      if (title?.trim()) await updateProduct(p.id, { title });
+                    }}
+                    className="px-3 py-2 rounded border border-gray-600"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => deleteProduct(p.id)}
+                    className="px-3 py-2 rounded border border-red-600 text-red-400"
+                  >
+                    Excluir
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </main>
+
+        {isAdmin && (
+          <aside
+            className="fixed bottom-4 right-4 bg-gray-900 p-4 rounded shadow-lg w-80"
+            style={{ border: "1px solid #333" }}
+          >
+            <h3 className="font-semibold">Painel Admin</h3>
+            <div className="mt-2">
+              Cofre da plataforma: <strong>R$ {Number(platformBalance).toFixed(2)}</strong>
+            </div>
+            <div className="mt-2">
+              Tema:{" "}
+              <input
+                value={primaryColor}
+                onChange={(e) => setPrimaryColor(e.target.value)}
+                type="color"
+                className="ml-2 w-8 h-6 cursor-pointer"
+              />
+            </div>
+            <div className="mt-2">
+              Fundo:{" "}
+              <input
+                value={bgColor}
+                onChange={(e) => setBgColor(e.target.value)}
+                type="color"
+                className="ml-2 w-8 h-6 cursor-pointer"
+              />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => setNotification("Salvar tema: implemente em Firestore")}
+                className="px-2 py-1 rounded bg-blue-600 text-white text-xs"
+              >
+                Salvar tema
+              </button>
+              <button
+                onClick={() => setNotification("Atualizado via Firestore (real-time)!")}
+                className="px-2 py-1 rounded border border-gray-600 text-xs"
+              >
+                Atualizar
+              </button>
+            </div>
+
+            <div className="mt-3">
+              <h4 className="font-semibold text-sm">Criar Produto</h4>
+              <CreateProductForm onCreate={createProduct} onUploadImage={uploadImageFile} />
+            </div>
+
+            <div className="mt-3">
+              <h4 className="font-semibold text-sm">Retirar PIX</h4>
+              <div className="flex gap-2 mt-2">
+                <input
+                  id="pixkey"
+                  placeholder="chave PIX"
+                  className="px-2 py-1 rounded bg-gray-800 text-white flex-1 text-sm"
+                />
+                <button
+                  onClick={() => {
+                    const key = document.getElementById("pixkey")?.value;
+                    withdrawToPix(key);
+                  }}
+                  className="px-2 py-1 rounded bg-green-600 text-white text-xs"
+                >
+                  Retirar
+                </button>
+              </div>
+            </div>
+          </aside>
+        )}
+      </div>
     </div>
-  </div>
-
-  <div class="product-meta flex" style="margin-bottom:12px">
-    <span class="badge">Maior: Spaguete rainbow 780M/s</span>
-    <span class="badge">Estoque: Varia por item</span>
-    <span class="rating">Avaliações: <strong id="reviewsCount">5000</strong></span>
-  </div>
-
-  <div id="products" class="grid">
-    <!-- cards renderizados por JS -->
-  </div>
-
-  <div style="height:8px"></div>
-  <footer>
-    <div id="footer-msg">em breve mais estoque atualizado para vocês⚠️</div>
-  </footer>
-</div>
-
-<script>
-/* ======= CONFIG ======= */
-const WA_NUMBER = '+5598984658374'; // se quiser trocar, altere aqui
-let reviewsCount = 5000; // valor que aparece de avaliações
-
-const products = [
-  { id:1, title:"La cucaracha", subtitle:"14.4M/s", price:"$10", priceBR:"R$10" },
-  { id:2, title:"Graipuss medusa candy 🟣", subtitle:"9M/s", price:"$5", priceBR:"R$5" },
-  { id:3, title:"Las vaquitas Rainbow", subtitle:"9M/s", price:"$7.5", priceBR:"R$7,50" },
-  { id:4, title:"Graipuss medusa 🟡", subtitle:"1.2M/s", price:"$3.5", priceBR:"R$3,50" },
-  { id:5, title:"Pot hotpos 🟡", subtitle:"5M/s", price:"$2.5", priceBR:"R$2,50" },
-  { id:6, title:"Esok sekolah", subtitle:"+230M/s", price:"$100", priceBR:"R$100" },
-  { id:7, title:"Spaguete rainbow", subtitle:"780M/s", price:"$500", priceBR:"R$500" },
-  { id:8, title:"Pot hotpos 🔵", subtitle:"12M/s", price:"$7.5", priceBR:"R$7,50" },
-  { id:9, title:"Los Lock block", subtitle:"--", price:"$6", priceBR:"R$6" },
-  { id:10, title:"Lock block ADM", subtitle:"--", price:"$5", priceBR:"R$5" },
-  { id:11, title:"Los combinacionas", subtitle:"195M/s", price:"$120", priceBR:"R$120" },
-  { id:12, title:"Los job job rainbow", subtitle:"25M/s", price:"$15", priceBR:"R$15" },
-  { id:13, title:"Los tralarelitos", subtitle:"--", price:"$2.5", priceBR:"R$2,50" },
-  { id:14, title:"Secret misterioso (1M-10M)", subtitle:"misterioso", price:"$3", priceBR:"R$3" },
-  { id:15, title:"Los primos yingYang", subtitle:"681M/s", price:"$400", priceBR:"R$400" },
-  { id:16, title:"Los primos (511M/s)", subtitle:"511M/s", price:"$260", priceBR:"R$260" },
-  { id:17, title:"Los primos 🔥 (341M/s)", subtitle:"341M/s", price:"$200", priceBR:"R$200" }
-];
-
-/* ======= render ======= */
-const productsEl = document.getElementById('products');
-const reviewsEl = document.getElementById('reviewsCount');
-reviewsEl.innerText = reviewsCount;
-
-function makeWhatsAppLink(productName){
-  const text = encodeURIComponent(`Olá, gostaria de adquirir: ${productName}`);
-  // wa.me link (internacional)
-  const cleaned = WA_NUMBER.replace(/[^+\d]/g,'');
-  return `https://wa.me/${cleaned.replace('+','')}/?text=${text}`;
+  );
 }
 
-function productCard(p){
-  return `
-    <article class="card" data-title="${p.title.toLowerCase()} ${p.subtitle.toLowerCase()}">
-      <div style="min-height:18px"></div>
-      <h3>${escapeHtml(p.title)}</h3>
-      <div class="desc">${escapeHtml(p.subtitle)}</div>
-      <div class="price">${escapeHtml(p.priceBR)}</div>
-      <a class="btn" href="${makeWhatsAppLink(p.title)}" target="_blank" rel="noopener noreferrer">Comprar no WhatsApp</a>
-      <div class="note">Para saber mais sobre os Brainrot clique em WhatsApp e fale com o vendedor 😉</div>
-    </article>
-  `;
+function CreateProductForm({ onCreate, onUploadImage }) {
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [price, setPrice] = useState(0);
+  const [stock, setStock] = useState(1);
+  const [desc, setDesc] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+
+  const handleSubmit = () => {
+    if (!title.trim()) return alert("Título é obrigatório");
+    onCreate({
+      title,
+      subtitle,
+      price: Number(price) || 0,
+      stock: Number(stock) || 0,
+      description: desc,
+      image: imageUrl,
+    });
+    setTitle("");
+    setSubtitle("");
+    setPrice(0);
+    setStock(1);
+    setDesc("");
+    setImageUrl("");
+  };
+
+  return (
+    <div className="space-y-2 text-sm">
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Título *"
+        className="w-full px-2 py-1 rounded bg-gray-800 text-white"
+      />
+      <input
+        value={subtitle}
+        onChange={(e) => setSubtitle(e.target.value)}
+        placeholder="Subtítulo"
+        className="w-full px-2 py-1 rounded bg-gray-800 text-white"
+      />
+      <div className="flex gap-2">
+        <input
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="Preço"
+          type="number"
+          step="0.01"
+          className="px-2 py-1 rounded bg-gray-800 text-white"
+        />
+        <input
+          value={stock}
+          onChange={(e) => setStock(e.target.value)}
+          placeholder="Estoque"
+          type="number"
+          className="px-2 py-1 rounded bg-gray-800 text-white"
+        />
+      </div>
+      <textarea
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder="Descrição"
+        className="w-full px-2 py-1 rounded bg-gray-800 text-white"
+        rows="2"
+      />
+      <div>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            try {
+              const url = await onUploadImage(f);
+              setImageUrl(url);
+            } catch (err) {
+              alert("Erro ao fazer upload da imagem");
+            }
+          }}
+        />
+        {imageUrl && <img src={imageUrl} alt="preview" className="h-24 mt-2 object-contain" />}
+      </div>
+      <button
+        onClick={handleSubmit}
+        className="px-3 py-2 rounded bg-blue-500 text-white text-sm"
+      >
+        Criar Produto
+      </button>
+    </div>
+  );
 }
-
-function renderProducts(list){
-  productsEl.innerHTML = list.map(productCard).join('');
-}
-
-/* simple escape */
-function escapeHtml(str){
-  return String(str).replace(/[&<>"']/g, function(m){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m] });
-}
-
-/* initial render */
-renderProducts(products);
-
-/* search */
-const input = document.getElementById('search');
-input.addEventListener('input', function(){
-  const q = this.value.trim().toLowerCase();
-  if(!q){ renderProducts(products); return; }
-  const filtered = products.filter(p => (p.title+p.subtitle+p.price).toLowerCase().includes(q));
-  renderProducts(filtered);
-});
-document.getElementById('clearSearch').addEventListener('click', function(){
-  input.value=''; renderProducts(products);
-});
-
-/* optional: expose function to quickly update reviews from console */
-window.__setReviews = function(n){ reviewsCount = Number(n)||0; reviewsEl.innerText = reviewsCount; }
-</script>
-
-</body>
-</html>
